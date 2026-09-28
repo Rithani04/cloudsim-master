@@ -29,6 +29,11 @@ import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.cloudbus.cloudsim.examples.autoscaling.state.CloudState;
+import org.cloudbus.cloudsim.examples.autoscaling.state.CloudStateCollector;
+import org.cloudbus.cloudsim.examples.autoscaling.AutoscalingManager;
+import org.cloudbus.cloudsim.examples.autoscaling.controller.ThresholdAutoscaler;
+
 /**
  * Stage 1 CloudSim environment for the
  * Distribution-Shift-Aware Safe Reinforcement Learning
@@ -43,6 +48,8 @@ import java.util.List;
  *     VM/Application Instances
  *        ↓
  *     CloudSim Datacenter
+ *        ↓
+ *     Cloud State Collector
  *
  * No RL, PPO, uncertainty estimation or distribution-shift
  * detection is implemented yet.
@@ -51,9 +58,15 @@ public class CloudAutoscalingExample {
 
     private static List<Vm> vmList;
 
+    /*
+     * Person 1:
+     * Cloud state observation/collection.
+     */
+    private static List<Cloudlet> allCloudlets;
+    private static CloudStateCollector stateCollector;
 
-    public static void main(String[] args) {
 
+    public static void main(String[] args) throws Exception {
         Log.println("==============================================");
         Log.println(" Cloud Autoscaling CloudSim - Stage 1");
         Log.println("==============================================");
@@ -76,13 +89,23 @@ public class CloudAutoscalingExample {
                     traceFlag
             );
 
+            /*
+             * Initialize the cloud state collector.
+             */
+            stateCollector =
+                    new CloudStateCollector();
+            allCloudlets =
+                    new ArrayList<>();
+
 
             /* =====================================================
                2. CREATE DATACENTER
                ===================================================== */
 
             Datacenter datacenter =
-                    createDatacenter("Autoscaling_Datacenter");
+                    createDatacenter(
+                            "Autoscaling_Datacenter"
+                    );
 
 
             /* =====================================================
@@ -92,20 +115,54 @@ public class CloudAutoscalingExample {
             DatacenterBrokerEX broker =
                     createBroker();
 
-            int brokerId = broker.getId();
+            int brokerId =
+                    broker.getId();
+
+            ThresholdAutoscaler thresholdAutoscaler =
+                    new ThresholdAutoscaler();
 
 
             /* =====================================================
                4. CREATE APPLICATION INSTANCES
                ===================================================== */
 
-            vmList = createVmList(brokerId);
+            vmList =
+                    createVmList(
+                            brokerId
+                    );
 
-            broker.submitGuestList(vmList);
+            broker.submitGuestList(
+                    vmList
+            );
+
+            int datacenterId =
+                    datacenter.getId();
+
+            AutoscalingManager autoscalingManager =
+                    new AutoscalingManager(
+
+                            "Autoscaling_Manager",
+
+                            broker,
+
+                            thresholdAutoscaler,
+
+                            stateCollector,
+
+                            vmList,
+
+                            allCloudlets,
+
+                            datacenterId
+                    );
 
 
             Log.println();
-            Log.println("Infrastructure created:");
+
+            Log.println(
+                    "Infrastructure created:"
+            );
+
             Log.println(
                     "Hosts              : "
                             + AutoscalingConfig.NUMBER_OF_HOSTS
@@ -146,7 +203,10 @@ public class CloudAutoscalingExample {
                ===================================================== */
 
             Log.println();
-            Log.println("Starting CloudSim simulation...");
+
+            Log.println(
+                    "Starting CloudSim simulation..."
+            );
 
             CloudSim.startSimulation();
 
@@ -154,7 +214,7 @@ public class CloudAutoscalingExample {
 
 
             /* =====================================================
-               8. COLLECT RESULTS
+               8. COLLECT COMPLETED CLOUDLETS
                ===================================================== */
 
             List<Cloudlet> completedCloudlets =
@@ -162,12 +222,60 @@ public class CloudAutoscalingExample {
 
 
             /* =====================================================
-               9. PRINT RESULTS
+               9. COLLECT FINAL CLOUD STATE
+               ===================================================== */
+
+            CloudState finalState =
+                    stateCollector.collectState(
+
+                            AutoscalingConfig.SIMULATION_TIME,
+
+                            /*
+                             * Current Stage 1 workload metric.
+                             *
+                             * This is currently the total number
+                             * of generated cloudlets.
+                             *
+                             * Later this can be replaced by
+                             * instantaneous/request-rate workload.
+                             */
+                            AutoscalingConfig.NUMBER_OF_CLOUDLETS,
+
+                            calculateAverageCpuUtilization(),
+
+                            countActiveVms(),
+
+                            completedCloudlets
+                    );
+
+
+            Log.println();
+
+            Log.println(
+                    "========== FINAL CLOUD STATE =========="
+            );
+
+            Log.println(
+                    finalState
+            );
+
+            Log.println(
+                    "======================================="
+            );
+
+
+            /* =====================================================
+               10. PRINT SIMULATION SUMMARY
                ===================================================== */
 
             printSimulationSummary(
                     completedCloudlets
             );
+
+
+            /* =====================================================
+               11. PRINT CLOUDLET RESULTS
+               ===================================================== */
 
             printCloudletList(
                     completedCloudlets
@@ -175,6 +283,7 @@ public class CloudAutoscalingExample {
 
 
             Log.println();
+
             Log.println(
                     "Cloud autoscaling Stage 1 finished!"
             );
@@ -202,9 +311,11 @@ public class CloudAutoscalingExample {
                 new ArrayList<>();
 
 
-        for (int hostId = 0;
-             hostId < AutoscalingConfig.NUMBER_OF_HOSTS;
-             hostId++) {
+        for (
+                int hostId = 0;
+                hostId < AutoscalingConfig.NUMBER_OF_HOSTS;
+                hostId++
+        ) {
 
 
             /* -----------------------------------------------------
@@ -215,9 +326,11 @@ public class CloudAutoscalingExample {
                     new ArrayList<>();
 
 
-            for (int peId = 0;
-                 peId < AutoscalingConfig.HOST_PES;
-                 peId++) {
+            for (
+                    int peId = 0;
+                    peId < AutoscalingConfig.HOST_PES;
+                    peId++
+            ) {
 
                 peList.add(
                         new Pe(
@@ -236,6 +349,7 @@ public class CloudAutoscalingExample {
 
             Host host =
                     new Host(
+
                             hostId,
 
                             new RamProvisionerSimple(
@@ -256,7 +370,9 @@ public class CloudAutoscalingExample {
                     );
 
 
-            hostList.add(host);
+            hostList.add(
+                    host
+            );
         }
 
 
@@ -264,13 +380,17 @@ public class CloudAutoscalingExample {
            DATACENTER CHARACTERISTICS
            ========================================================= */
 
-        String architecture = "x86";
+        String architecture =
+                "x86";
 
-        String operatingSystem = "Linux";
+        String operatingSystem =
+                "Linux";
 
-        String virtualMachineMonitor = "Xen";
+        String virtualMachineMonitor =
+                "Xen";
 
-        double timeZone = 5.5;
+        double timeZone =
+                5.5;
 
         double costPerCpu =
                 AutoscalingConfig.COST_PER_CPU;
@@ -316,7 +436,8 @@ public class CloudAutoscalingExample {
            CREATE DATACENTER
            ========================================================= */
 
-        Datacenter datacenter = null;
+        Datacenter datacenter =
+                null;
 
 
         try {
@@ -353,7 +474,8 @@ public class CloudAutoscalingExample {
 
     private static DatacenterBrokerEX createBroker() {
 
-        DatacenterBrokerEX broker = null;
+        DatacenterBrokerEX broker =
+                null;
 
 
         try {
@@ -387,16 +509,26 @@ public class CloudAutoscalingExample {
 
 
         /*
-         * For Stage 1 we create the maximum available
-         * VM instances.
+         * Stage 1:
          *
-         * Later the autoscaling controller will determine
-         * how many instances are active.
+         * We create the INITIAL_INSTANCES number
+         * of VMs at the beginning of the simulation.
+         *
+         * IMPORTANT:
+         *
+         * MAX_INSTANCES is only the maximum allowed
+         * number of instances.
+         *
+         * Person 3 will later implement the VM lifecycle
+         * and dynamic creation/removal of instances.
          */
 
-        for (int vmId = 0;
-             vmId < AutoscalingConfig.INITIAL_INSTANCES;
-             vmId++) {
+
+        for (
+                int vmId = 0;
+                vmId < AutoscalingConfig.INITIAL_INSTANCES;
+                vmId++
+        ) {
 
 
             Vm vm =
@@ -422,7 +554,9 @@ public class CloudAutoscalingExample {
                     );
 
 
-            vmList.add(vm);
+            vmList.add(
+                    vm
+            );
         }
 
 
@@ -456,13 +590,17 @@ public class CloudAutoscalingExample {
                 );
 
 
-        for (int i = 0;
-             i < AutoscalingConfig.NUMBER_OF_CLOUDLETS;
-             i++) {
+        for (
+                int i = 0;
+                i < AutoscalingConfig.NUMBER_OF_CLOUDLETS;
+                i++
+        ) {
 
 
             long cloudletLength =
-                    getCloudletLength(i);
+                    getCloudletLength(
+                            i
+                    );
 
 
             Cloudlet cloudlet =
@@ -488,6 +626,10 @@ public class CloudAutoscalingExample {
 
             cloudlet.setUserId(
                     brokerId
+            );
+
+            allCloudlets.add(
+                    cloudlet
             );
 
 
@@ -540,7 +682,9 @@ public class CloudAutoscalingExample {
 
             case PERIODIC:
 
-                if ((cloudletId / 10) % 2 == 0) {
+                if (
+                        (cloudletId / 10) % 2 == 0
+                ) {
 
                     return AutoscalingConfig.CLOUDLET_LENGTH;
 
@@ -650,6 +794,114 @@ public class CloudAutoscalingExample {
 
 
     /* =============================================================
+       CALCULATE AVERAGE CPU UTILIZATION
+       ============================================================= */
+
+    private static double calculateAverageCpuUtilization() {
+
+        if (
+                vmList == null
+                        || vmList.isEmpty()
+        ) {
+
+            return 0.0;
+        }
+
+
+        double totalUtilization =
+                0.0;
+
+        int count =
+                0;
+
+
+        /*
+         * CloudSim.clock() gives the current
+         * simulation time after the simulation ends.
+         */
+
+        double currentTime =
+                CloudSim.clock();
+
+
+        for (
+                Vm vm :
+                vmList
+        ) {
+
+
+            if (vm != null) {
+
+                double utilization =
+                        vm.getTotalUtilizationOfCpu(
+                                currentTime
+                        );
+
+
+                totalUtilization +=
+                        utilization;
+
+                count++;
+            }
+        }
+
+
+        if (count == 0) {
+
+            return 0.0;
+        }
+
+
+        /*
+         * VM CPU utilization is represented
+         * as a value between 0 and 1.
+         *
+         * CloudState expects the value
+         * to be displayed as a percentage.
+         */
+
+        return (
+                totalUtilization / count
+        ) * 100.0;
+    }
+
+
+    /* =============================================================
+       COUNT ACTIVE VMS
+       ============================================================= */
+
+    private static int countActiveVms() {
+
+        if (
+                vmList == null
+        ) {
+
+            return 0;
+        }
+
+
+        int activeVms =
+                0;
+
+
+        for (
+                Vm vm :
+                vmList
+        ) {
+
+
+            if (vm != null) {
+
+                activeVms++;
+            }
+        }
+
+
+        return activeVms;
+    }
+
+
+    /* =============================================================
        PRINT SIMULATION SUMMARY
        ============================================================= */
 
@@ -657,17 +909,23 @@ public class CloudAutoscalingExample {
             List<Cloudlet> cloudletList) {
 
 
-        int successfulCloudlets = 0;
+        int successfulCloudlets =
+                0;
 
-        double totalResponseTime = 0.0;
-
-
-        for (Cloudlet cloudlet :
-                cloudletList) {
+        double totalResponseTime =
+                0.0;
 
 
-            if (cloudlet.getStatus()
-                    == Cloudlet.CloudletStatus.SUCCESS) {
+        for (
+                Cloudlet cloudlet :
+                cloudletList
+        ) {
+
+
+            if (
+                    cloudlet.getStatus()
+                            == Cloudlet.CloudletStatus.SUCCESS
+            ) {
 
 
                 successfulCloudlets++;
@@ -684,10 +942,13 @@ public class CloudAutoscalingExample {
         }
 
 
-        double averageResponseTime = 0.0;
+        double averageResponseTime =
+                0.0;
 
 
-        if (successfulCloudlets > 0) {
+        if (
+                successfulCloudlets > 0
+        ) {
 
             averageResponseTime =
                     totalResponseTime
@@ -755,7 +1016,8 @@ public class CloudAutoscalingExample {
             List<Cloudlet> list) {
 
 
-        String indent = "    ";
+        String indent =
+                "    ";
 
 
         Log.println();
@@ -784,12 +1046,16 @@ public class CloudAutoscalingExample {
                 new DecimalFormat("###.##");
 
 
-        for (Cloudlet cloudlet :
-                list) {
+        for (
+                Cloudlet cloudlet :
+                list
+        ) {
 
 
-            if (cloudlet.getStatus()
-                    == Cloudlet.CloudletStatus.SUCCESS) {
+            if (
+                    cloudlet.getStatus()
+                            == Cloudlet.CloudletStatus.SUCCESS
+            ) {
 
 
                 Log.println(

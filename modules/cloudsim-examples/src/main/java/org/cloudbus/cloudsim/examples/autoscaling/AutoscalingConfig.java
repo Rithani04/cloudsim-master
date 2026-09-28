@@ -119,9 +119,9 @@ public class AutoscalingConfig {
    BASELINE AUTOSCALER
    ========================================================= */
 
-    public static final double SCALE_UP_THRESHOLD = 0.70;
+    public static final double SCALE_UP_THRESHOLD = 70.0;
 
-    public static final double SCALE_DOWN_THRESHOLD = 0.30;
+    public static final double SCALE_DOWN_THRESHOLD = 30.0;
 
     public static final double SCALE_COOLDOWN = 20.0;
 
