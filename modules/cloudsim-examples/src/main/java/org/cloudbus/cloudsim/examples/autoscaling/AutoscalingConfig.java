@@ -115,7 +115,15 @@ public class AutoscalingConfig {
         GRADUAL_INCREASE,
         SUDDEN_BURST
     }
+    /* =========================================================
+   BASELINE AUTOSCALER
+   ========================================================= */
 
+    public static final double SCALE_UP_THRESHOLD = 0.70;
+
+    public static final double SCALE_DOWN_THRESHOLD = 0.30;
+
+    public static final double SCALE_COOLDOWN = 20.0;
 
     // Stage 1 workload regime
     public static final WorkloadRegime WORKLOAD_REGIME =
@@ -125,4 +133,5 @@ public class AutoscalingConfig {
     private AutoscalingConfig() {
         // Prevent object creation.
     }
+
 }

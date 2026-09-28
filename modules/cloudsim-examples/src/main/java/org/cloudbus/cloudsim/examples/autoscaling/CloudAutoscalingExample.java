@@ -29,7 +29,6 @@ import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
 
-
 /**
  * Stage 1 CloudSim environment for the
  * Distribution-Shift-Aware Safe Reinforcement Learning
@@ -396,7 +395,7 @@ public class CloudAutoscalingExample {
          */
 
         for (int vmId = 0;
-             vmId < AutoscalingConfig.MAX_INSTANCES;
+             vmId < AutoscalingConfig.INITIAL_INSTANCES;
              vmId++) {
 
 
