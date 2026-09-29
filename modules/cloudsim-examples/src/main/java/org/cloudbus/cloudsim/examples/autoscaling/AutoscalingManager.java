@@ -350,27 +350,75 @@ public class AutoscalingManager extends SimEntity {
      * Scale in by one VM.
      */
     private void scaleIn() {
-        if (vmList.size()
-                <= AutoscalingConfig.MIN_INSTANCES) {
-            System.out.println(
-                    "AUTOSCALER | Scale-in blocked: MIN_INSTANCES reached."
-            );
+
+        // Never go below the configured minimum number of VMs.
+        if (vmList.size() <= AutoscalingConfig.MIN_INSTANCES) {
             return;
         }
 
-        Vm vm = vmList.get(vmList.size() - 1);
+        /*
+         * Find an idle VM that is safe to destroy.
+         *
+         * We iterate from the end of the list so that, when possible,
+         * newer VMs are removed first.
+         */
+        Vm vmToRemove = null;
 
+        double currentTime = CloudSim.clock();
+
+        for (int i = vmList.size() - 1; i >= 0; i--) {
+
+            Vm vm = vmList.get(i);
+
+            /*
+             * Current CPU utilization of this VM.
+             */
+            double cpuUtilization =
+                    vm.getTotalUtilizationOfCpu(currentTime);
+
+            /*
+             * Treat very small CPU utilization as idle.
+             */
+            if (cpuUtilization <= 0.001) {
+                vmToRemove = vm;
+                break;
+            }
+        }
+
+        /*
+         * No idle VM was found.
+         *
+         * Do NOT destroy a busy VM because DatacenterBrokerEX will
+         * fail cloudlets currently associated with that VM.
+         */
+        if (vmToRemove == null) {
+
+            System.out.println(
+                    "AUTOSCALER | SCALE IN SKIPPED | "
+                            + "No idle VM available"
+            );
+
+            return;
+        }
+
+        /*
+         * Ask the broker to destroy the selected VM.
+         */
         List<Vm> destroyList = new ArrayList<>();
-        destroyList.add(vm);
+        destroyList.add(vmToRemove);
 
         broker.destroyVMsAfter(destroyList, 0);
 
-        vmList.remove(vm);
+        /*
+         * Remove it from the autoscaler's active VM list.
+         */
+        vmList.remove(vmToRemove);
+
         totalScaleInActions++;
 
         System.out.println(
                 "AUTOSCALER | SCALE IN | Destroyed VM #"
-                        + vm.getId()
+                        + vmToRemove.getId()
                         + " | Active VMs="
                         + vmList.size()
         );

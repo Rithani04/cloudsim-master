@@ -2,7 +2,7 @@ package org.cloudbus.cloudsim.examples.autoscaling;
 
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Datacenter;
-import org.cloudbus.cloudsim.EX.DatacenterBrokerEX;
+import org.cloudbus.cloudsim.examples.autoscaling.broker.DynamicCloudletBroker;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.Host;
 import org.cloudbus.cloudsim.Log;
@@ -31,7 +31,6 @@ import java.util.List;
 
 import org.cloudbus.cloudsim.examples.autoscaling.state.CloudState;
 import org.cloudbus.cloudsim.examples.autoscaling.state.CloudStateCollector;
-import org.cloudbus.cloudsim.examples.autoscaling.AutoscalingManager;
 import org.cloudbus.cloudsim.examples.autoscaling.controller.ThresholdAutoscaler;
 
 /**
@@ -112,7 +111,7 @@ public class CloudAutoscalingExample {
                3. CREATE BROKER
                ===================================================== */
 
-            DatacenterBrokerEX broker =
+            DynamicCloudletBroker broker =
                     createBroker();
 
             int brokerId =
@@ -472,25 +471,21 @@ public class CloudAutoscalingExample {
        CREATE BROKER
        ============================================================= */
 
-    private static DatacenterBrokerEX createBroker() {
+    private static DynamicCloudletBroker createBroker() {
 
-        DatacenterBrokerEX broker =
-                null;
-
+        DynamicCloudletBroker broker;
 
         try {
 
             broker =
-                    new DatacenterBrokerEX(
-                            "Autoscaling_Broker",
-                            1000000
+                    new DynamicCloudletBroker(
+                            "Broker"
                     );
 
         } catch (Exception e) {
 
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
-
 
         return broker;
     }
@@ -569,7 +564,7 @@ public class CloudAutoscalingExample {
        ============================================================= */
 
     private static void createWorkload(
-            DatacenterBrokerEX broker,
+            DynamicCloudletBroker broker,
             int brokerId) {
 
 
@@ -658,6 +653,7 @@ public class CloudAutoscalingExample {
                     cloudletList,
                     arrivalTime
             );
+            broker.registerScheduledCloudlets(1);
         }
     }
 
