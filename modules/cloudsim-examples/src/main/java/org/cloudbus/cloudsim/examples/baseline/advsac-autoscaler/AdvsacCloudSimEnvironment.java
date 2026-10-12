@@ -49,6 +49,7 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
     private int nextVmId;
     private double currentTime;
     private boolean episodeDone;
+    private boolean lastConstraintViolation;
     private int totalScaleUpOperations;
     private int totalScaleDownOperations;
 
@@ -79,6 +80,7 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
             arrivalTimes = new ArrayList<>();
             currentTime = 0.0;
             episodeDone = false;
+            lastConstraintViolation = false;
             totalScaleUpOperations = 0;
             totalScaleDownOperations = 0;
             stateBuilder.reset();
@@ -125,6 +127,7 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         }
 
         int vmDelta = AdvsacConfig.actionValueFromIndex(actionIndex);
+        lastConstraintViolation = false;
         double nextTime;
 
         if (simulationThread == null) {
@@ -186,7 +189,8 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         double reward = rewardCalculator.calculate(
                 stateBuilder.getLastAverageCpuUtilization(),
                 stateBuilder.getLastAverageResponseTime(),
-                activeVms.size());
+                activeVms.size(),
+                lastConstraintViolation);
 
         return new AdvsacTransition(
                 nextState,
@@ -225,6 +229,9 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
      */
     private int applyInitialScalingAction(final int requestedDelta) {
         if (requestedDelta > 0) {
+            if (activeVms.size() + requestedDelta > AdvsacConfig.MAX_VM_COUNT) {
+                lastConstraintViolation = true;
+            }
             int additions = Math.min(
                     requestedDelta,
                     AdvsacConfig.MAX_VM_COUNT - activeVms.size());
@@ -238,6 +245,9 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         }
 
         if (requestedDelta < 0) {
+            if (activeVms.size() + requestedDelta < AdvsacConfig.MIN_VM_COUNT) {
+                lastConstraintViolation = true;
+            }
             int removals = Math.min(
                     -requestedDelta,
                     activeVms.size() - AdvsacConfig.MIN_VM_COUNT);
@@ -259,6 +269,9 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
      */
     private int applyScalingAction(final int requestedDelta) {
         if (requestedDelta > 0) {
+            if (activeVms.size() + requestedDelta > AdvsacConfig.MAX_VM_COUNT) {
+                lastConstraintViolation = true;
+            }
             int additions = Math.min(
                     requestedDelta,
                     AdvsacConfig.MAX_VM_COUNT - activeVms.size());
@@ -276,6 +289,9 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         }
 
         if (requestedDelta < 0) {
+            if (activeVms.size() + requestedDelta < AdvsacConfig.MIN_VM_COUNT) {
+                lastConstraintViolation = true;
+            }
             int removalsRequested = Math.min(
                     -requestedDelta,
                     activeVms.size() - AdvsacConfig.MIN_VM_COUNT);
