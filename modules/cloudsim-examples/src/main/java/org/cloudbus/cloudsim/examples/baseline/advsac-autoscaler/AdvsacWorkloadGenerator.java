@@ -31,9 +31,11 @@ public final class AdvsacWorkloadGenerator {
     private static final int MAX_REQUESTS_PER_EPISODE = 5000;
 
     private final Random random;
+    private final long seed;
     private final List<Double> arrivalTimes = new ArrayList<>();
 
     public AdvsacWorkloadGenerator(final long seed) {
+        this.seed = seed;
         random = new Random(seed);
     }
 
@@ -54,7 +56,7 @@ public final class AdvsacWorkloadGenerator {
 
         List<Cloudlet> generated = new ArrayList<>();
         arrivalTimes.clear();
-        random.setSeed(AdvsacConfig.RANDOM_SEED);
+        random.setSeed(seed);
         UtilizationModel utilization = new UtilizationModelFull();
 
         double arrivalTime = 0.0;
