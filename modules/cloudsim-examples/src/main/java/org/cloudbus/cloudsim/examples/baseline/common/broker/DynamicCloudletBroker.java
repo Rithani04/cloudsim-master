@@ -211,6 +211,15 @@ public class DynamicCloudletBroker extends DatacenterBrokerEX {
             double utilization =
                     vm.getTotalUtilizationOfCpu(currentTime);
 
+            /*
+             * A VM can remain in the broker's bookkeeping briefly after a
+             * destruction event is requested/processed. A destroyed VM has
+             * no host and must never receive a new cloudlet.
+             */
+            if (vm.getHost() == null) {
+                continue;
+            }
+
             if (Double.isNaN(utilization)) {
                 utilization = 0.0;
             }
