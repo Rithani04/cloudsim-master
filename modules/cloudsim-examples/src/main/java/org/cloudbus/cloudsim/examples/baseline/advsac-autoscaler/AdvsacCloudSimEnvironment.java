@@ -82,7 +82,7 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
 
             Datacenter datacenter = createDatacenter("Advsac_Datacenter");
             datacenterId = datacenter.getId();
-            broker = new DynamicCloudletBroker("Advsac_Broker");
+            broker = new DynamicCloudletBroker("Advsac_Broker", AdvsacConfig.EPISODE_DURATION + 1.0);
 
             for (int vmId = 0; vmId < AdvsacConfig.INITIAL_VM_COUNT; vmId++) {
                 activeVms.add(createVm(vmId));
