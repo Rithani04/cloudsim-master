@@ -2,6 +2,8 @@ package org.cloudbus.cloudsim.examples.baseline.thresholdautoscaler;
 
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Datacenter;
+import org.cloudbus.cloudsim.examples.baseline.common.AutoscalingConfig;
+import org.cloudbus.cloudsim.examples.baseline.common.AutoscalingManager;
 import org.cloudbus.cloudsim.examples.baseline.common.broker.DynamicCloudletBroker;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.Host;
