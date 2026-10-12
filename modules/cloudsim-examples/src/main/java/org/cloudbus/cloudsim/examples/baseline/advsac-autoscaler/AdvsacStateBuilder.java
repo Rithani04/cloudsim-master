@@ -40,10 +40,12 @@ public final class AdvsacStateBuilder {
         int recentArrivals = countArrivals(
                 currentTime - AdvsacConfig.RL_TIMESTEP,
                 currentTime,
+                true,
                 arrivalTimes);
         int previousArrivals = countArrivals(
                 currentTime - (2.0 * AdvsacConfig.RL_TIMESTEP),
                 currentTime - AdvsacConfig.RL_TIMESTEP,
+                false,
                 arrivalTimes);
 
         lastWorkloadRate = recentArrivals / AdvsacConfig.RL_TIMESTEP;
@@ -163,12 +165,15 @@ public final class AdvsacStateBuilder {
     }
 
     private int countArrivals(
-            final double startExclusive,
-            final double endInclusive,
+            final double startInclusive,
+            final double end,
+            final boolean includeEnd,
             final List<Double> arrivalTimes) {
         int count = 0;
         for (double arrivalTime : arrivalTimes) {
-            if (arrivalTime > startExclusive && arrivalTime <= endInclusive) {
+            boolean inWindow = arrivalTime >= startInclusive
+                    && (includeEnd ? arrivalTime <= end : arrivalTime < end);
+            if (inWindow) {
                 count++;
             }
         }
