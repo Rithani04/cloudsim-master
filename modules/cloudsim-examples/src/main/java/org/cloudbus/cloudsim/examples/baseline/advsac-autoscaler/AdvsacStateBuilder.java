@@ -34,7 +34,10 @@ public final class AdvsacStateBuilder {
 
         lastAverageCpuUtilization = calculateAverageCpuUtilization(activeVms, currentTime);
         lastAverageMemoryUtilization = calculateAverageMemoryUtilization(activeVms);
-        lastAverageResponseTime = calculateAverageResponseTime(cloudlets);
+        double recentResponseTime = calculateRecentAverageResponseTime(cloudlets, currentTime);
+        if (recentResponseTime >= 0.0) {
+            lastAverageResponseTime = recentResponseTime;
+        }
         lastQueueLength = calculateQueueLength(currentTime, cloudlets, arrivalTimes);
 
         int recentArrivals = countArrivals(
@@ -132,22 +135,41 @@ public final class AdvsacStateBuilder {
         return count == 0 ? 0.0 : total / count;
     }
 
-    private double calculateAverageResponseTime(final List<Cloudlet> cloudlets) {
+    /**
+     * Calculates response time for cloudlets completed in the latest RL
+     * window. Returns -1 when the window has no completions so the previous
+     * observation can be carried forward rather than treating missing data
+     * as a perfect response time.
+     */
+    private double calculateRecentAverageResponseTime(
+            final List<Cloudlet> cloudlets,
+            final double currentTime) {
+        double windowStart = currentTime - AdvsacConfig.RL_TIMESTEP;
         double total = 0.0;
         int completed = 0;
 
         for (Cloudlet cloudlet : cloudlets) {
             if (cloudlet.getStatus() == Cloudlet.CloudletStatus.SUCCESS) {
-                double responseTime = cloudlet.getExecFinishTime()
-                        - cloudlet.getSubmissionTime();
-                if (responseTime >= 0.0 && !Double.isNaN(responseTime)
-                        && !Double.isInfinite(responseTime)) {
-                    total += responseTime;
-                    completed++;
+                double finishTime = cloudlet.getExecFinishTime();
+                if (finishTime > windowStart && finishTime <= currentTime) {
+                    double responseTime = finishTime - cloudlet.getSubmissionTime();
+                    if (responseTime >= 0.0 && !Double.isNaN(responseTime)
+                            && !Double.isInfinite(responseTime)) {
+                        total += responseTime;
+                        completed++;
+                    }
                 }
             }
         }
-        return completed == 0 ? 0.0 : total / completed;
+        return completed == 0 ? -1.0 : total / completed;
+    }
+
+    public void reset() {
+        lastAverageCpuUtilization = 0.0;
+        lastAverageMemoryUtilization = 0.0;
+        lastAverageResponseTime = 0.0;
+        lastQueueLength = 0;
+        lastWorkloadRate = 0.0;
     }
 
     private int calculateQueueLength(
