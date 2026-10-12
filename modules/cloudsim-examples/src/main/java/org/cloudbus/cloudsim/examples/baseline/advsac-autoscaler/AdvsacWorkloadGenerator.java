@@ -7,9 +7,8 @@ import org.cloudbus.cloudsim.examples.baseline.common.AutoscalingConfig;
 import org.cloudbus.cloudsim.examples.baseline.common.broker.DynamicCloudletBroker;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 
 /**
