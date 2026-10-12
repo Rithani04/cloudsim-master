@@ -14,6 +14,9 @@ import org.cloudbus.cloudsim.VmSchedulerTimeShared;
 import org.cloudbus.cloudsim.examples.baseline.common.AutoscalingConfig;
 import org.cloudbus.cloudsim.examples.baseline.common.broker.DynamicCloudletBroker;
 import org.cloudbus.cloudsim.core.CloudSim;
+import org.cloudbus.cloudsim.core.CloudSimTags;
+import org.cloudbus.cloudsim.core.SimEntity;
+import org.cloudbus.cloudsim.core.SimEvent;
 import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
@@ -98,6 +101,8 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                     workloadModel);
             arrivalTimes = new ArrayList<>(generator.getArrivalTimes());
 
+            // Ensure a simulation event exists exactly at the episode boundary.
+            new EpisodeTicker("Advsac_Episode_Ticker");
             CloudSim.terminateSimulation(AdvsacConfig.EPISODE_DURATION);
 
             /*
@@ -299,6 +304,41 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                 new VmAllocationPolicySimple(hosts),
                 new LinkedList<Storage>(),
                 0);
+    }
+
+
+    /**
+     * Keeps the event queue alive and creates an event exactly at the
+     * configured episode boundary, avoiding CloudSim processing a later
+     * event before applying its termination cutoff.
+     */
+    private static final class EpisodeTicker extends SimEntity {
+
+        private enum TickerTag implements CloudSimTags {
+            TICK
+        }
+
+        private EpisodeTicker(final String name) throws Exception {
+            super(name);
+        }
+
+        @Override
+        public void startEntity() {
+            schedule(getId(), AdvsacConfig.RL_TIMESTEP, TickerTag.TICK);
+        }
+
+        @Override
+        public void processEvent(final SimEvent event) {
+            double nextTick = CloudSim.clock() + AdvsacConfig.RL_TIMESTEP;
+            if (nextTick <= AdvsacConfig.EPISODE_DURATION) {
+                schedule(getId(), AdvsacConfig.RL_TIMESTEP, TickerTag.TICK);
+            }
+        }
+
+        @Override
+        public void shutdownEntity() {
+            // No external resources to release.
+        }
     }
 
     private void waitForPauseOrCompletion(final double targetTime) {
