@@ -8,6 +8,8 @@ import org.cloudbus.cloudsim.examples.baseline.common.broker.DynamicCloudletBrok
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Random;
 
 /**
@@ -30,6 +32,7 @@ public final class AdvsacWorkloadGenerator {
     private static final int MAX_REQUESTS_PER_EPISODE = 5000;
 
     private final Random random;
+    private final List<Double> arrivalTimes = new ArrayList<>();
 
     public AdvsacWorkloadGenerator(final long seed) {
         random = new Random(seed);
@@ -51,6 +54,8 @@ public final class AdvsacWorkloadGenerator {
         }
 
         List<Cloudlet> generated = new ArrayList<>();
+        arrivalTimes.clear();
+        random.setSeed(AdvsacConfig.RANDOM_SEED);
         UtilizationModel utilization = new UtilizationModelFull();
 
         double arrivalTime = 0.0;
@@ -71,6 +76,7 @@ public final class AdvsacWorkloadGenerator {
 
             cloudlet.setUserId(brokerId);
             generated.add(cloudlet);
+            arrivalTimes.add(arrivalTime);
 
             List<Cloudlet> singleCloudlet = new ArrayList<>(1);
             singleCloudlet.add(cloudlet);
@@ -82,6 +88,11 @@ public final class AdvsacWorkloadGenerator {
         }
 
         return generated;
+    }
+
+    /** Returns a defensive copy aligned by index with the generated cloudlet list. */
+    public List<Double> getArrivalTimes() {
+        return Collections.unmodifiableList(new ArrayList<>(arrivalTimes));
     }
 
     private double sampleInterarrival(
