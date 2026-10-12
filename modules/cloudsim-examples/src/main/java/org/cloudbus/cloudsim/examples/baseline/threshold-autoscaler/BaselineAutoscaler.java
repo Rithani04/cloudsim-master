@@ -1,5 +1,7 @@
 package org.cloudbus.cloudsim.examples.baseline.thresholdautoscaler;
 
+import org.cloudbus.cloudsim.examples.baseline.common.AutoscalingConfig;
+
 /**
  * Traditional threshold-based autoscaling controller.
  *
