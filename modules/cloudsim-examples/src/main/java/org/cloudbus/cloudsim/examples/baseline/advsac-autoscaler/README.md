@@ -13,7 +13,7 @@ are intentionally **not implemented yet**.
 - Action values: {-2, -1, 0, +1, +2}
 - SLO: 10 seconds (aligned with the existing 10,000 MI cloudlet at 1,000 MIPS and the threshold baseline's temporary 10-second SLA)
 - Reward utilization term: average CPU utilization
-- Constraint penalty: -1.0 if the VM count is outside the allowed range
+- Constraint penalty: -1.0 when an action attempts to cross a VM bound (actions are clipped to keep the pool valid)
 - Random seed: 42
 - Workload models: STABLE, PERIODIC, GRADUAL_INCREASE, SUDDEN_BURST
 
