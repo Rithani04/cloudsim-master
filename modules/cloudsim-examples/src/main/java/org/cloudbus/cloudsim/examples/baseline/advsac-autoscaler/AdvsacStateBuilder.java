@@ -1,0 +1,187 @@
+package org.cloudbus.cloudsim.examples.baseline.advsacautoscaler;
+
+import org.cloudbus.cloudsim.Cloudlet;
+import org.cloudbus.cloudsim.Vm;
+
+import java.util.List;
+
+/**
+ * Converts raw CloudSim observations into the fixed eight-element
+ * normalized AdvSAC state vector.
+ */
+public final class AdvsacStateBuilder {
+
+    private static final double QUEUE_NORMALIZATION_CAPACITY = 100.0;
+    private static final double REQUESTS_PER_WINDOW_NORMALIZATION_CAPACITY = 10.0;
+
+    private double lastAverageCpuUtilization;
+    private double lastAverageMemoryUtilization;
+    private double lastAverageResponseTime;
+    private int lastQueueLength;
+    private double lastWorkloadRate;
+
+    public AdvsacState build(
+            final double currentTime,
+            final List<Vm> activeVms,
+            final List<Cloudlet> cloudlets,
+            final List<Double> arrivalTimes) {
+
+        if (activeVms == null || cloudlets == null || arrivalTimes == null
+                || cloudlets.size() != arrivalTimes.size()) {
+            throw new IllegalArgumentException(
+                    "VMs, cloudlets and aligned arrival timestamps are required.");
+        }
+
+        lastAverageCpuUtilization = calculateAverageCpuUtilization(activeVms, currentTime);
+        lastAverageMemoryUtilization = calculateAverageMemoryUtilization(activeVms);
+        lastAverageResponseTime = calculateAverageResponseTime(cloudlets);
+        lastQueueLength = calculateQueueLength(currentTime, cloudlets, arrivalTimes);
+
+        int recentArrivals = countArrivals(
+                currentTime - AdvsacConfig.RL_TIMESTEP,
+                currentTime,
+                arrivalTimes);
+        int previousArrivals = countArrivals(
+                currentTime - (2.0 * AdvsacConfig.RL_TIMESTEP),
+                currentTime - AdvsacConfig.RL_TIMESTEP,
+                arrivalTimes);
+
+        lastWorkloadRate = recentArrivals / AdvsacConfig.RL_TIMESTEP;
+        double normalizedWorkload = clamp(
+                recentArrivals / REQUESTS_PER_WINDOW_NORMALIZATION_CAPACITY);
+        double normalizedGrowth;
+        if (recentArrivals + previousArrivals == 0) {
+            normalizedGrowth = 0.5;
+        } else {
+            double signedGrowth = (double) (recentArrivals - previousArrivals)
+                    / (recentArrivals + previousArrivals);
+            normalizedGrowth = clamp((signedGrowth + 1.0) / 2.0);
+        }
+
+        double normalizedResponseTime = clamp(
+                lastAverageResponseTime / (2.0 * AdvsacConfig.SLO_SECONDS));
+        double normalizedReplicaCount = AdvsacConfig.MAX_VM_COUNT
+                == AdvsacConfig.MIN_VM_COUNT
+                ? 0.0
+                : (double) (activeVms.size() - AdvsacConfig.MIN_VM_COUNT)
+                / (AdvsacConfig.MAX_VM_COUNT - AdvsacConfig.MIN_VM_COUNT);
+
+        double slaMet = lastAverageResponseTime <= AdvsacConfig.SLO_SECONDS ? 1.0 : 0.0;
+
+        return new AdvsacState(new double[] {
+                clamp(lastAverageCpuUtilization),
+                clamp(lastAverageMemoryUtilization),
+                normalizedWorkload,
+                normalizedGrowth,
+                clamp(lastQueueLength / QUEUE_NORMALIZATION_CAPACITY),
+                normalizedResponseTime,
+                clamp(normalizedReplicaCount),
+                slaMet
+        });
+    }
+
+    public double getLastAverageCpuUtilization() {
+        return lastAverageCpuUtilization;
+    }
+
+    public double getLastAverageMemoryUtilization() {
+        return lastAverageMemoryUtilization;
+    }
+
+    public double getLastAverageResponseTime() {
+        return lastAverageResponseTime;
+    }
+
+    public int getLastQueueLength() {
+        return lastQueueLength;
+    }
+
+    public double getLastWorkloadRate() {
+        return lastWorkloadRate;
+    }
+
+    private double calculateAverageCpuUtilization(
+            final List<Vm> activeVms,
+            final double currentTime) {
+        if (activeVms.isEmpty()) {
+            return 0.0;
+        }
+
+        double total = 0.0;
+        for (Vm vm : activeVms) {
+            total += vm.getTotalUtilizationOfCpu(currentTime);
+        }
+        return total / activeVms.size();
+    }
+
+    private double calculateAverageMemoryUtilization(final List<Vm> activeVms) {
+        if (activeVms.isEmpty()) {
+            return 0.0;
+        }
+
+        double total = 0.0;
+        int count = 0;
+        for (Vm vm : activeVms) {
+            if (vm.getRam() > 0) {
+                total += (double) vm.getCurrentRequestedRam() / vm.getRam();
+                count++;
+            }
+        }
+        return count == 0 ? 0.0 : total / count;
+    }
+
+    private double calculateAverageResponseTime(final List<Cloudlet> cloudlets) {
+        double total = 0.0;
+        int completed = 0;
+
+        for (Cloudlet cloudlet : cloudlets) {
+            if (cloudlet.getStatus() == Cloudlet.CloudletStatus.SUCCESS) {
+                double responseTime = cloudlet.getExecFinishTime()
+                        - cloudlet.getSubmissionTime();
+                if (responseTime >= 0.0 && !Double.isNaN(responseTime)
+                        && !Double.isInfinite(responseTime)) {
+                    total += responseTime;
+                    completed++;
+                }
+            }
+        }
+        return completed == 0 ? 0.0 : total / completed;
+    }
+
+    private int calculateQueueLength(
+            final double currentTime,
+            final List<Cloudlet> cloudlets,
+            final List<Double> arrivalTimes) {
+        int queue = 0;
+        for (int i = 0; i < cloudlets.size(); i++) {
+            if (arrivalTimes.get(i) <= currentTime
+                    && cloudlets.get(i).getStatus() != Cloudlet.CloudletStatus.SUCCESS) {
+                queue++;
+            }
+        }
+        return queue;
+    }
+
+    private int countArrivals(
+            final double startExclusive,
+            final double endInclusive,
+            final List<Double> arrivalTimes) {
+        int count = 0;
+        for (double arrivalTime : arrivalTimes) {
+            if (arrivalTime > startExclusive && arrivalTime <= endInclusive) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private double clamp(final double value) {
+        if (Double.isNaN(value) || value < 0.0) {
+            return 0.0;
+        }
+        if (value > 1.0) {
+            return 1.0;
+        }
+        return value;
+    }
+}
