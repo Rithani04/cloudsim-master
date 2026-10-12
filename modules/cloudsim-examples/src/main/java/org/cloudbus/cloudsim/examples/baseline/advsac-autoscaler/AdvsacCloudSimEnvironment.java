@@ -71,6 +71,7 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         }
 
         try {
+            simulationThread = null;
             CloudSim.init(1, Calendar.getInstance(), false);
 
             activeVms = new ArrayList<>();
@@ -230,8 +231,6 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                 activeVms.add(createVm(nextVmId++));
             }
             if (additions > 0) {
-            }
-            if (additions > 0) {
                 totalScaleUpOperations++;
             }
             return additions;
@@ -268,6 +267,8 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                 List<Vm> singleton = new ArrayList<>(1);
                 singleton.add(vm);
                 broker.createVmsAfter(singleton, AdvsacConfig.PROVISIONING_DELAY_SECONDS);
+            }
+            if (additions > 0) {
                 totalScaleUpOperations++;
             }
             return additions;
