@@ -81,6 +81,7 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
             episodeDone = false;
             totalScaleUpOperations = 0;
             totalScaleDownOperations = 0;
+            stateBuilder.reset();
 
             Datacenter datacenter = createDatacenter("Advsac_Datacenter");
             broker = new DynamicCloudletBroker("Advsac_Broker", AdvsacConfig.EPISODE_DURATION + 1.0);
