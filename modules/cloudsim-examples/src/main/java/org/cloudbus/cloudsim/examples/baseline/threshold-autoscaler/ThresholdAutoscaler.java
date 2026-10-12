@@ -1,6 +1,7 @@
 package org.cloudbus.cloudsim.examples.baseline.thresholdautoscaler;
 
 import org.cloudbus.cloudsim.examples.baseline.common.AutoscalingConfig;
+import org.cloudbus.cloudsim.examples.baseline.common.controller.AutoscalingController;
 import org.cloudbus.cloudsim.examples.baseline.common.state.CloudState;
 
 /**
