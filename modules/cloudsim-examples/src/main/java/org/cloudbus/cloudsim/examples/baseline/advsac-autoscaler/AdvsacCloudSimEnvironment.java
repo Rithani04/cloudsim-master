@@ -275,14 +275,20 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
             int additions = Math.min(
                     requestedDelta,
                     AdvsacConfig.MAX_VM_COUNT - activeVms.size());
+            List<Vm> newVms = new ArrayList<>(additions);
             for (int i = 0; i < additions; i++) {
                 Vm vm = createVm(nextVmId++);
                 activeVms.add(vm);
-                List<Vm> singleton = new ArrayList<>(1);
-                singleton.add(vm);
-                broker.createVmsAfter(singleton, AdvsacConfig.PROVISIONING_DELAY_SECONDS);
+                newVms.add(vm);
             }
-            if (additions > 0) {
+
+            // Submit the entire scale-out as one broker event. Sending one event
+            // per VM can make DatacenterBrokerEX request the same not-yet-acked
+            // VM more than once when several events are processed at one time.
+            if (!newVms.isEmpty()) {
+                broker.createVmsAfter(
+                        newVms,
+                        AdvsacConfig.PROVISIONING_DELAY_SECONDS);
                 totalScaleUpOperations++;
             }
             return additions;
@@ -295,22 +301,27 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
             int removalsRequested = Math.min(
                     -requestedDelta,
                     activeVms.size() - AdvsacConfig.MIN_VM_COUNT);
-            int removed = 0;
+            List<Vm> vmsToRemove = new ArrayList<>(removalsRequested);
 
-            for (int i = activeVms.size() - 1; i >= 0 && removed < removalsRequested; i--) {
+            for (int i = activeVms.size() - 1;
+                    i >= 0 && vmsToRemove.size() < removalsRequested;
+                    i--) {
                 Vm candidate = activeVms.get(i);
-                if (candidate.getTotalUtilizationOfCpu(currentTime) <= 0.001) {
-                    List<Vm> singleton = new ArrayList<>(1);
-                    singleton.add(candidate);
-                    broker.destroyVMsAfter(singleton, 0.0);
-                    activeVms.remove(i);
-                    removed++;
+                if (candidate.getTotalUtilizationOfCpu(currentTime) <= 0.001
+                        && candidate.getHost() != null) {
+                    vmsToRemove.add(candidate);
                 }
             }
-            if (removed > 0) {
+
+            // DatacenterBrokerEX permits only one outstanding destruction batch.
+            // Send all selected VMs in a single event to avoid resetting its
+            // acknowledgement counter while a previous destruction is pending.
+            if (!vmsToRemove.isEmpty()) {
+                broker.destroyVMsAfter(vmsToRemove, 0.0);
+                activeVms.removeAll(vmsToRemove);
                 totalScaleDownOperations++;
             }
-            return -removed;
+            return -vmsToRemove.size();
         }
 
         return 0;
