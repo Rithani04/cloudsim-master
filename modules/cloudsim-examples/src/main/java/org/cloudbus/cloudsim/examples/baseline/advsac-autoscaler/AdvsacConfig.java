@@ -25,7 +25,7 @@ public final class AdvsacConfig {
     public static final int MAX_VM_COUNT = 12;
 
     public static final double EPISODE_DURATION = 1000.0;
-    public static final double SLO_SECONDS = 0.5;
+    public static final double SLO_SECONDS = 10.0;
     public static final double CPU_UTILIZATION_TARGET = 0.70;
     public static final double MEMORY_UTILIZATION_TARGET = 0.70;
     public static final double PROVISIONING_DELAY_SECONDS = 0.0;
@@ -47,7 +47,7 @@ public final class AdvsacConfig {
 
     /**
      * Select with -Dadvsac.workload=STABLE|PERIODIC|GRADUAL_INCREASE|SUDDEN_BURST.
-     * STABLE is used if the property is missing or invalid.
+     * STABLE is used if the property is missing; invalid values fail fast.
      */
     public enum WorkloadModel {
         STABLE,
