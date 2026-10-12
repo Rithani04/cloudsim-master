@@ -11,7 +11,7 @@ are intentionally **not implemented yet**.
 - VM limits: minimum 1, initial 3, maximum 12
 - State dimension: 8, all values normalized to [0, 1]
 - Action values: {-2, -1, 0, +1, +2}
-- SLO: 0.5 seconds
+- SLO: 10 seconds (aligned with the existing 10,000 MI cloudlet at 1,000 MIPS and the threshold baseline's temporary 10-second SLA)
 - Reward utilization term: average CPU utilization
 - Constraint penalty: -1.0 if the VM count is outside the allowed range
 - Random seed: 42
