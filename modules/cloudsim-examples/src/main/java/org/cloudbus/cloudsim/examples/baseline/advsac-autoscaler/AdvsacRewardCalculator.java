@@ -19,7 +19,8 @@ public final class AdvsacRewardCalculator {
     public double calculate(
             final double averageCpuUtilization,
             final double averageResponseTime,
-            final int activeVmCount) {
+            final int activeVmCount,
+            final boolean constraintViolation) {
 
         if (!isFinite(averageCpuUtilization)
                 || averageCpuUtilization < 0.0
@@ -41,7 +42,8 @@ public final class AdvsacRewardCalculator {
                     - (AdvsacConfig.SLO_SECONDS / averageResponseTime);
         }
 
-        if (activeVmCount < AdvsacConfig.MIN_VM_COUNT
+        if (constraintViolation
+                || activeVmCount < AdvsacConfig.MIN_VM_COUNT
                 || activeVmCount > AdvsacConfig.MAX_VM_COUNT) {
             reward += AdvsacConfig.INSTANCE_CONSTRAINT_PENALTY;
         }
