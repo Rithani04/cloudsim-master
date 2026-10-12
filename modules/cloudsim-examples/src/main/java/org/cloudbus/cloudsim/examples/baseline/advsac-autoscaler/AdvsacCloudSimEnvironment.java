@@ -7,7 +7,6 @@ import org.cloudbus.cloudsim.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.Host;
 import org.cloudbus.cloudsim.Pe;
 import org.cloudbus.cloudsim.Storage;
-import org.cloudbus.cloudsim.UtilizationModelFull;
 import org.cloudbus.cloudsim.Vm;
 import org.cloudbus.cloudsim.VmAllocationPolicySimple;
 import org.cloudbus.cloudsim.VmSchedulerTimeShared;
@@ -47,7 +46,6 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
     private List<Double> arrivalTimes;
     private DynamicCloudletBroker broker;
     private Thread simulationThread;
-    private int datacenterId;
     private int nextVmId;
     private double currentTime;
     private boolean episodeDone;
@@ -84,15 +82,12 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
             totalScaleDownOperations = 0;
 
             Datacenter datacenter = createDatacenter("Advsac_Datacenter");
-            datacenterId = datacenter.getId();
             broker = new DynamicCloudletBroker("Advsac_Broker", AdvsacConfig.EPISODE_DURATION + 1.0);
 
             for (int vmId = 0; vmId < AdvsacConfig.INITIAL_VM_COUNT; vmId++) {
                 activeVms.add(createVm(vmId));
             }
             nextVmId = activeVms.size();
-            broker.submitGuestList(activeVms);
-
             AdvsacWorkloadGenerator generator =
                     new AdvsacWorkloadGenerator(AdvsacConfig.RANDOM_SEED);
             cloudlets = generator.generate(
@@ -106,25 +101,11 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
             CloudSim.terminateSimulation(AdvsacConfig.EPISODE_DURATION);
 
             /*
-             * Start with a fully initialized observation at t=10. The initial
-             * VM creation and broker startup events therefore have time to run.
+             * Return S0 before starting CloudSim. The first action is applied
+             * to the initial VM pool, then the simulation advances from t=0
+             * to t=10. This preserves exactly 100 ten-second transitions.
              */
-            currentTime = AdvsacConfig.RL_TIMESTEP;
-            CloudSim.pauseSimulation((long) currentTime);
-            simulationThread = new Thread(
-                    () -> CloudSim.startSimulation(),
-                    "Advsac-CloudSim-episode");
-            simulationThread.setDaemon(true);
-            simulationThread.start();
-
-            waitForPauseOrCompletion(currentTime);
-            if (!CloudSim.isPaused()) {
-                episodeDone = true;
-                throw new IllegalStateException(
-                        "CloudSim completed before the first RL pause at t="
-                                + currentTime + " seconds.");
-            }
-
+            currentTime = 0.0;
             return observe(currentTime);
         } catch (Exception exception) {
             throw new IllegalStateException("Could not reset the AdvSAC CloudSim environment.",
@@ -140,36 +121,62 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         if (actionIndex < 0 || actionIndex >= AdvsacConfig.ACTION_DIMENSION) {
             throw new IllegalArgumentException("Action index must be in [0,4].");
         }
-        if (!CloudSim.isPaused()) {
-            throw new IllegalStateException("CloudSim must be paused at an RL decision boundary.");
-        }
 
         int vmDelta = AdvsacConfig.actionValueFromIndex(actionIndex);
-        int appliedDelta = applyScalingAction(vmDelta);
+        double nextTime;
 
-        double nextTime = Math.min(
-                currentTime + AdvsacConfig.RL_TIMESTEP,
-                AdvsacConfig.EPISODE_DURATION);
+        if (simulationThread == null) {
+            // First action is applied before VM creation, so scale-in is safe.
+            applyInitialScalingAction(vmDelta);
+            broker.submitGuestList(activeVms);
 
-        if (nextTime >= AdvsacConfig.EPISODE_DURATION) {
-            /*
-             * CloudSim's termination cutoff takes precedence over a pause
-             * at the same time, so let the final interval run to completion.
-             */
-            CloudSim.resumeSimulation();
-            joinSimulationThread();
-            currentTime = AdvsacConfig.EPISODE_DURATION;
-            episodeDone = true;
-        } else {
+            nextTime = AdvsacConfig.RL_TIMESTEP;
             if (!CloudSim.pauseSimulation((long) nextTime)) {
                 throw new IllegalStateException(
-                        "Could not schedule CloudSim pause at t=" + nextTime);
+                        "Could not schedule initial CloudSim pause at t=" + nextTime);
             }
-            CloudSim.resumeSimulation();
+
+            simulationThread = new Thread(
+                    () -> CloudSim.startSimulation(),
+                    "Advsac-CloudSim-episode");
+            simulationThread.setDaemon(true);
+            simulationThread.start();
             waitForPauseOrCompletion(nextTime);
             currentTime = nextTime;
+
             if (!CloudSim.isPaused()) {
                 episodeDone = true;
+                throw new IllegalStateException(
+                        "CloudSim completed before the first RL pause at t="
+                                + nextTime + " seconds.");
+            }
+        } else {
+            if (!CloudSim.isPaused()) {
+                throw new IllegalStateException(
+                        "CloudSim must be paused at an RL decision boundary.");
+            }
+
+            applyScalingAction(vmDelta);
+            nextTime = Math.min(
+                    currentTime + AdvsacConfig.RL_TIMESTEP,
+                    AdvsacConfig.EPISODE_DURATION);
+
+            if (nextTime >= AdvsacConfig.EPISODE_DURATION) {
+                CloudSim.resumeSimulation();
+                joinSimulationThread();
+                currentTime = AdvsacConfig.EPISODE_DURATION;
+                episodeDone = true;
+            } else {
+                if (!CloudSim.pauseSimulation((long) nextTime)) {
+                    throw new IllegalStateException(
+                            "Could not schedule CloudSim pause at t=" + nextTime);
+                }
+                CloudSim.resumeSimulation();
+                waitForPauseOrCompletion(nextTime);
+                currentTime = nextTime;
+                if (!CloudSim.isPaused()) {
+                    episodeDone = true;
+                }
             }
         }
 
@@ -212,6 +219,41 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
     }
 
     /**
+     * Applies the first action before the CloudSim broker has created any VMs.
+     */
+    private int applyInitialScalingAction(final int requestedDelta) {
+        if (requestedDelta > 0) {
+            int additions = Math.min(
+                    requestedDelta,
+                    AdvsacConfig.MAX_VM_COUNT - activeVms.size());
+            for (int i = 0; i < additions; i++) {
+                activeVms.add(createVm(nextVmId++));
+            }
+            if (additions > 0) {
+            }
+            if (additions > 0) {
+                totalScaleUpOperations++;
+            }
+            return additions;
+        }
+
+        if (requestedDelta < 0) {
+            int removals = Math.min(
+                    -requestedDelta,
+                    activeVms.size() - AdvsacConfig.MIN_VM_COUNT);
+            for (int i = 0; i < removals; i++) {
+                activeVms.remove(activeVms.size() - 1);
+            }
+            if (removals > 0) {
+                totalScaleDownOperations++;
+            }
+            return -removals;
+        }
+
+        return 0;
+    }
+
+    /**
      * Returns the actual number of VMs added/removed. Scale-in only removes
      * idle VMs to avoid terminating requests that are still running.
      */
@@ -244,9 +286,11 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                     singleton.add(candidate);
                     broker.destroyVMsAfter(singleton, 0.0);
                     activeVms.remove(i);
-                    totalScaleDownOperations++;
                     removed++;
                 }
+            }
+            if (removed > 0) {
+                totalScaleDownOperations++;
             }
             return -removed;
         }
