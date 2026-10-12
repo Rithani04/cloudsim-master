@@ -114,7 +114,19 @@ public final class AdvsacStateBuilder {
 
         double total = 0.0;
         for (Vm vm : activeVms) {
-            total += vm.getTotalUtilizationOfCpu(currentTime);
+            double utilization = vm.getTotalUtilizationOfCpu(currentTime);
+
+            // CloudSim's aggregate VM utilization can exceed 1.0 when
+            // multiple cloudlets execute concurrently. The RL state and
+            // reward both define CPU utilization as a normalized value.
+            if (Double.isNaN(utilization) || Double.isInfinite(utilization)
+                    || utilization < 0.0) {
+                utilization = 0.0;
+            } else if (utilization > 1.0) {
+                utilization = 1.0;
+            }
+
+            total += utilization;
         }
         return total / activeVms.size();
     }
