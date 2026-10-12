@@ -15,7 +15,7 @@ public final class AdvsacEnvironmentSmokeTest {
 
     public static void main(final String[] args) {
         AdvsacCloudSimEnvironment environment = new AdvsacCloudSimEnvironment();
-        AdvsacState state = environment.reset();
+        var state = environment.reset();
 
         System.out.println("Workload model: " + AdvsacConfig.WORKLOAD_MODEL);
         System.out.println("Initial observation time: "
