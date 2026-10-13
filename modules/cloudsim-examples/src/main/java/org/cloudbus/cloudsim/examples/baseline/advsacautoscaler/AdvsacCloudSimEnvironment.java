@@ -221,7 +221,8 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                 observationTime,
                 activeVms,
                 cloudlets,
-                arrivalTimes);
+                arrivalTimes,
+                broker.getCloudletList().size());
     }
 
     /**
