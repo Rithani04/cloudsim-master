@@ -193,7 +193,9 @@ public final class AdvsacStateBuilder {
     public void reset() {
         lastAverageCpuUtilization = 0.0;
         lastAverageMemoryUtilization = 0.0;
-        lastAverageResponseTime = 0.0;
+        // No completed requests exist at S0. Use the SLO as a neutral
+        // placeholder so missing measurements are not treated as zero latency.
+        lastAverageResponseTime = AdvsacConfig.SLO_SECONDS;
         lastQueueLength = 0;
         lastWorkloadRate = 0.0;
     }
