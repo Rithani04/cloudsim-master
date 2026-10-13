@@ -1,0 +1,30 @@
+name: AdvSAC Environment Smoke Test
+
+on:
+  push:
+    branches:
+      - phase2/advsac-baseline-organization
+  pull_request:
+    branches:
+      - phase2/advsac-baseline-organization
+
+jobs:
+  environment-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Compile CloudSim modules
+        run: mvn -B -pl modules/cloudsim-examples -am -DskipTests compile
+      - name: Run 100-step environment smoke test
+        run: >
+          mvn -B -pl modules/cloudsim-examples
+          org.codehaus.mojo:exec-maven-plugin:3.5.0:java
+          -Dexec.mainClass=org.cloudbus.cloudsim.examples.baseline.advsacautoscaler.AdvsacEnvironmentSmokeTest
