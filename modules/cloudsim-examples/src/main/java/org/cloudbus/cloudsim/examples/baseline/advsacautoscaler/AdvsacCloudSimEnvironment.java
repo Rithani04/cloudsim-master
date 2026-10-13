@@ -307,16 +307,22 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                     i >= 0 && vmsToRemove.size() < removalsRequested;
                     i--) {
                 Vm candidate = activeVms.get(i);
-                if (candidate.getTotalUtilizationOfCpu(currentTime) <= 0.001
-                        && candidate.getHost() != null) {
+                if (candidate.getHost() != null
+                        && candidate.getTotalUtilizationOfCpu(currentTime) <= 0.001
+                        && !hasUnfinishedCloudletAssignedTo(candidate)) {
                     vmsToRemove.add(candidate);
                 }
             }
 
-            // DatacenterBrokerEX permits only one outstanding destruction batch.
-            // Send all selected VMs in a single event to avoid resetting its
-            // acknowledgement counter while a previous destruction is pending.
+            /*
+             * Exclude selected VMs from broker scheduling BEFORE sending the
+             * destroy event. A cloudlet-arrival event at the same simulation
+             * timestamp must not be assigned to a VM that is being removed.
+             */
             if (!vmsToRemove.isEmpty()) {
+                for (Vm vm : vmsToRemove) {
+                    broker.excludeVmFromScheduling(vm);
+                }
                 broker.destroyVMsAfter(vmsToRemove, 0.0);
                 activeVms.removeAll(vmsToRemove);
                 totalScaleDownOperations++;
@@ -325,6 +331,20 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         }
 
         return 0;
+    }
+
+    /**
+     * A VM is eligible for scale-in only when no unfinished cloudlet is
+     * assigned to it. CPU utilization alone is insufficient because a cloudlet
+     * can be queued or between scheduling events while utilization reads zero.
+     */
+    private boolean hasUnfinishedCloudletAssignedTo(final Vm vm) {
+        for (Cloudlet cloudlet : cloudlets) {
+            if (cloudlet.getGuestId() == vm.getId() && !cloudlet.isFinished()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Vm createVm(final int vmId) {
