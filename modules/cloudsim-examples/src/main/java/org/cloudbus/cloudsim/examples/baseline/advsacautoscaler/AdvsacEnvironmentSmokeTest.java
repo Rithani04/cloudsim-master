@@ -3,10 +3,11 @@ package org.cloudbus.cloudsim.examples.baseline.advsacautoscaler;
 /**
  * Integration smoke test for the CloudSim-backed environment before RL training.
  *
- * It checks the 10-second decision interval, state normalization, finite rewards,
- * VM bounds, action-index handling, and termination at exactly 1000 simulated
- * seconds. Scale-in may remove fewer VMs than requested when the remaining VMs
- * are busy; the environment must never destroy a VM with unfinished work.
+ * It checks response-time and reward arithmetic, the 10-second decision interval,
+ * state normalization, finite rewards, VM bounds, action-index handling, and
+ * termination at exactly 1000 simulated seconds. Scale-in may remove fewer VMs
+ * than requested when the remaining VMs are busy; the environment must never
+ * destroy a VM with unfinished work.
  */
 public final class AdvsacEnvironmentSmokeTest {
 
@@ -17,6 +18,8 @@ public final class AdvsacEnvironmentSmokeTest {
     }
 
     public static void main(final String[] args) {
+        validateResponseTimeAndRewardCalculations();
+
         AdvsacCloudSimEnvironment environment = new AdvsacCloudSimEnvironment();
         var initialState = environment.reset();
 
@@ -129,6 +132,44 @@ public final class AdvsacEnvironmentSmokeTest {
         System.out.println("Scale-down operations: "
                 + environment.getTotalScaleDownOperations());
         System.out.println("SMOKE TEST PASSED.");
+    }
+
+    private static void validateResponseTimeAndRewardCalculations() {
+        assertClose(
+                3.5,
+                AdvsacStateBuilder.calculateResponseTime(12.0, 8.5),
+                "Response time must equal finish time minus arrival time");
+        assertClose(
+                -1.0,
+                AdvsacStateBuilder.calculateResponseTime(8.0, 8.5),
+                "Finish before arrival must be rejected");
+
+        AdvsacRewardCalculator calculator = new AdvsacRewardCalculator();
+        double cpu = 0.8;
+        assertClose(0.8, calculator.calculate(cpu, 9.0, 3, false),
+                "Latency below SLO should have no SLA penalty");
+        assertClose(0.8, calculator.calculate(cpu, 10.0, 3, false),
+                "Latency exactly at SLO should have no SLA penalty");
+        assertClose(0.79, calculator.calculate(cpu, 10.1, 3, false),
+                "SLA penalty should increase smoothly above SLO");
+        assertClose(-0.2, calculator.calculate(cpu, 20.0, 3, false),
+                "SLA penalty should cap at one");
+        assertClose(-0.2, calculator.calculate(cpu, 100.0, 3, false),
+                "Extreme latency should not create an unbounded penalty");
+        assertClose(-0.2, calculator.calculate(cpu, 10.0, 3, true),
+                "Constraint violation should apply the configured penalty");
+
+        System.out.println("Response-time and reward checks passed.");
+    }
+
+    private static void assertClose(
+            final double expected,
+            final double actual,
+            final String message) {
+        if (Math.abs(expected - actual) > 1.0e-9) {
+            throw new IllegalStateException(
+                    message + ": expected " + expected + " but got " + actual);
+        }
     }
 
     private static void validateState(final double[] values, final int step) {
