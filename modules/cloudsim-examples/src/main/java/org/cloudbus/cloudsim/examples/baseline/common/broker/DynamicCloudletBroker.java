@@ -9,7 +9,9 @@ import org.cloudbus.cloudsim.EX.DatacenterBrokerEX;
 import org.cloudbus.cloudsim.core.GuestEntity;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Broker that dynamically assigns each cloudlet to one of the VMs
@@ -28,6 +30,9 @@ public class DynamicCloudletBroker extends DatacenterBrokerEX {
      * knows about cloudlets after their delayed arrival event fires.
      */
     private int scheduledCloudletCount = 0;
+
+    /** VMs excluded immediately when scale-in is requested, before destroy ACKs arrive. */
+    private final Set<Integer> excludedVmIds = new HashSet<>();
 
     /**
      * Creates the broker.
@@ -192,6 +197,17 @@ public class DynamicCloudletBroker extends DatacenterBrokerEX {
     }
 
     /**
+     * Prevents new cloudlets from being assigned to a VM that is being drained
+     * for scale-in. Call this before requesting destruction so same-time arrival
+     * events cannot select the VM before CloudSim processes the destroy event.
+     */
+    public void excludeVmFromScheduling(final Vm vm) {
+        if (vm != null) {
+            excludedVmIds.add(vm.getId());
+        }
+    }
+
+    /**
      * Select the least CPU-utilized currently active VM.
      */
     private Vm selectVm(List<GuestEntity> activeGuests) {
@@ -216,7 +232,7 @@ public class DynamicCloudletBroker extends DatacenterBrokerEX {
              * destruction event is requested/processed. A destroyed VM has
              * no host and must never receive a new cloudlet.
              */
-            if (vm.getHost() == null) {
+            if (vm.getHost() == null || excludedVmIds.contains(vm.getId())) {
                 continue;
             }
 
