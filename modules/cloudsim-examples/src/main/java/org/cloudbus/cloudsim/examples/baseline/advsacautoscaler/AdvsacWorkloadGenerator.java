@@ -57,7 +57,10 @@ public final class AdvsacWorkloadGenerator {
         List<Cloudlet> generated = new ArrayList<>();
         arrivalTimes.clear();
         random.setSeed(seed);
-        UtilizationModel utilization = new UtilizationModelFull();
+        UtilizationModel cpuUtilization = new UtilizationModelFull();
+        UtilizationModel memoryUtilization = time ->
+                0.25 + 0.25 * (0.5 + 0.5 * Math.sin(time / 60.0));
+        UtilizationModel bandwidthUtilization = new UtilizationModelFull();
 
         double arrivalTime = 0.0;
         int cloudletId = 0;
@@ -71,9 +74,9 @@ public final class AdvsacWorkloadGenerator {
                     AutoscalingConfig.VM_PES,
                     AutoscalingConfig.CLOUDLET_FILE_SIZE,
                     AutoscalingConfig.CLOUDLET_OUTPUT_SIZE,
-                    utilization,
-                    utilization,
-                    utilization);
+                    cpuUtilization,
+                    memoryUtilization,
+                    bandwidthUtilization);
 
             cloudlet.setUserId(brokerId);
             generated.add(cloudlet);
