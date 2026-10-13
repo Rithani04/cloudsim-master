@@ -8,7 +8,9 @@ import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.EX.DatacenterBrokerEX;
 import org.cloudbus.cloudsim.core.GuestEntity;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,6 +35,12 @@ public class DynamicCloudletBroker extends DatacenterBrokerEX {
 
     /** VMs excluded immediately when scale-in is requested, before destroy ACKs arrive. */
     private final Set<Integer> excludedVmIds = new HashSet<>();
+
+    /** VM IDs submitted for creation whose acknowledgements have not arrived yet. */
+    private final Set<Integer> vmCreationPendingIds = new HashSet<>();
+
+    /** Scale-out batches waiting for the previous VM-create batch to finish. */
+    private final Deque<List<Vm>> queuedVmCreationBatches = new ArrayDeque<>();
 
     /**
      * Creates the broker.
@@ -64,6 +72,79 @@ public class DynamicCloudletBroker extends DatacenterBrokerEX {
      */
     public void registerScheduledCloudlets(int count) {
         scheduledCloudletCount += count;
+    }
+
+    /**
+     * Track VM submissions so a scale-out event cannot cause the parent broker
+     * to submit VM_CREATE requests for VMs whose creation acknowledgements are
+     * still in flight.
+     */
+    @Override
+    public void submitGuestList(final List<? extends GuestEntity> list) {
+        super.submitGuestList(list);
+        for (GuestEntity guest : list) {
+            if (guest instanceof Vm vm
+                    && !getVmsToDatacentersMap().containsKey(vm.getId())) {
+                vmCreationPendingIds.add(vm.getId());
+            }
+        }
+    }
+
+    @Override
+    public void processEvent(final org.cloudbus.cloudsim.core.SimEvent ev) {
+        boolean vmCreateAck = ev.getTag() == CloudActionTags.VM_CREATE_ACK;
+        int acknowledgedVmId = vmCreateAck ? ((int[]) ev.getData())[1] : -1;
+
+        super.processEvent(ev);
+
+        if (vmCreateAck) {
+            vmCreationPendingIds.remove(acknowledgedVmId);
+            if (vmCreationPendingIds.isEmpty() && !queuedVmCreationBatches.isEmpty()) {
+                List<Vm> nextBatch = queuedVmCreationBatches.removeFirst();
+                send(getId(), 0.0, org.cloudbus.cloudsim.EX.CloudSimEXTags.BROKER_SUBMIT_VMS_NOW,
+                        nextBatch);
+            }
+        }
+    }
+
+    @Override
+    protected void processOtherEvent(final org.cloudbus.cloudsim.core.SimEvent ev) {
+        if (ev.getTag() == org.cloudbus.cloudsim.EX.CloudSimEXTags.BROKER_SUBMIT_VMS_NOW) {
+            @SuppressWarnings("unchecked")
+            List<Vm> batch = new ArrayList<>((List<Vm>) ev.getData());
+
+            if (!vmCreationPendingIds.isEmpty()) {
+                queuedVmCreationBatches.addLast(batch);
+                return;
+            }
+
+            dispatchVmCreationBatch(batch);
+            return;
+        }
+
+        super.processOtherEvent(ev);
+    }
+
+    private void dispatchVmCreationBatch(final List<Vm> batch) {
+        List<Vm> notYetSubmitted = new ArrayList<>();
+        for (Vm vm : batch) {
+            if (vm != null
+                    && !getVmsToDatacentersMap().containsKey(vm.getId())
+                    && !vmCreationPendingIds.contains(vm.getId())) {
+                notYetSubmitted.add(vm);
+            }
+        }
+
+        if (notYetSubmitted.isEmpty()) {
+            return;
+        }
+
+        // submitGuestList records the IDs as pending before creation requests
+        // are issued, so another scale-out batch will be queued until all ACKs.
+        submitGuestList(notYetSubmitted);
+        for (int datacenterId : getDatacenterIdsList()) {
+            createVmsInDatacenter(datacenterId);
+        }
     }
 
     /**
