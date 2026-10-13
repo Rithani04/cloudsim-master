@@ -184,9 +184,9 @@ public final class AdvsacStateBuilder {
                     }
                     // Measure end-to-end response time from the scheduled request
                     // arrival, not from when the broker submits it to a VM.
-                    double responseTime = finishTime - arrivalTimes.get(cloudletId);
-                    if (responseTime >= 0.0 && !Double.isNaN(responseTime)
-                            && !Double.isInfinite(responseTime)) {
+                    double responseTime = calculateResponseTime(
+                            finishTime, arrivalTimes.get(cloudletId));
+                    if (responseTime >= 0.0) {
                         total += responseTime;
                         completed++;
                     }
@@ -194,6 +194,20 @@ public final class AdvsacStateBuilder {
             }
         }
         return completed == 0 ? -1.0 : total / completed;
+    }
+
+    /**
+     * End-to-end response time from scheduled arrival to completion.
+     * Package-private so the smoke test can validate the metric directly.
+     */
+    static double calculateResponseTime(
+            final double finishTime,
+            final double arrivalTime) {
+        if (!Double.isFinite(finishTime) || !Double.isFinite(arrivalTime)
+                || finishTime < arrivalTime) {
+            return -1.0;
+        }
+        return finishTime - arrivalTime;
     }
 
     public void reset() {
