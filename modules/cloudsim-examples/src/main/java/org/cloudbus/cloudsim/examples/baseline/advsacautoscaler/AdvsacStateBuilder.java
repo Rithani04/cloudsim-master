@@ -35,7 +35,8 @@ public final class AdvsacStateBuilder {
 
         lastAverageCpuUtilization = calculateAverageCpuUtilization(activeVms, currentTime);
         lastAverageMemoryUtilization = calculateAverageMemoryUtilization(activeVms, currentTime);
-        double recentResponseTime = calculateRecentAverageResponseTime(cloudlets, currentTime);
+        double recentResponseTime = calculateRecentAverageResponseTime(
+                cloudlets, arrivalTimes, currentTime);
         if (recentResponseTime >= 0.0) {
             lastAverageResponseTime = recentResponseTime;
         }
@@ -51,6 +52,13 @@ public final class AdvsacStateBuilder {
                 currentTime - AdvsacConfig.RL_TIMESTEP,
                 false,
                 arrivalTimes);
+
+        // S0 is observed before CloudSim starts; scheduled arrivals are future
+        // events, not workload already seen by the controller.
+        if (currentTime <= 0.0) {
+            recentArrivals = 0;
+            previousArrivals = 0;
+        }
 
         lastWorkloadRate = recentArrivals / AdvsacConfig.RL_TIMESTEP;
         double normalizedWorkload = clamp(
@@ -160,6 +168,7 @@ public final class AdvsacStateBuilder {
      */
     private double calculateRecentAverageResponseTime(
             final List<Cloudlet> cloudlets,
+            final List<Double> arrivalTimes,
             final double currentTime) {
         double windowStart = currentTime - AdvsacConfig.RL_TIMESTEP;
         double total = 0.0;
