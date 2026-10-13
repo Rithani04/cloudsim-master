@@ -22,6 +22,16 @@ public final class AdvsacEnvironmentSmokeTest {
 
         validateState(initialState.toArray(), 0);
         double[] initialValues = initialState.toArray();
+        if (initialValues[2] != 0.0) {
+            throw new IllegalStateException(
+                    "Initial workload must be zero before CloudSim starts; got "
+                            + initialValues[2]);
+        }
+        if (initialValues[3] != 0.5) {
+            throw new IllegalStateException(
+                    "Initial workload growth must be neutral before observations exist; got "
+                            + initialValues[3]);
+        }
         if (initialValues[1] != 0.0) {
             throw new IllegalStateException(
                     "Initial memory utilization must be zero before CloudSim starts; got "
