@@ -72,7 +72,7 @@ final class AdvsacMlp {
             for (int out = 0; out < sizes[layer + 1]; out++) {
                 double gradient = delta[out];
                 if (layer < weights.length - 1
-                        && pass.preactivations[layer + 1][out] <= 0.0) {
+                        && pass.preactivations[layer][out] <= 0.0) {
                     gradient = 0.0;
                 }
                 for (int in = 0; in < sizes[layer]; in++) {
