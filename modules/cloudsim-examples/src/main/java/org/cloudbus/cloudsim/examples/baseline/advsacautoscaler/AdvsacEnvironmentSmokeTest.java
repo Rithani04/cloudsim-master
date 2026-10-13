@@ -21,6 +21,21 @@ public final class AdvsacEnvironmentSmokeTest {
         var initialState = environment.reset();
 
         validateState(initialState.toArray(), 0);
+        double[] initialValues = initialState.toArray();
+        if (initialValues[1] != 0.0) {
+            throw new IllegalStateException(
+                    "Initial memory utilization must be zero before CloudSim starts; got "
+                            + initialValues[1]);
+        }
+        if (initialValues[4] != 0.0) {
+            throw new IllegalStateException(
+                    "Initial waiting queue must be zero before any cloudlet arrival; got "
+                            + initialValues[4]);
+        }
+        if (initialValues[7] != 1.0) {
+            throw new IllegalStateException(
+                    "Initial SLA state must be 1 when no response-time violation has occurred.");
+        }
         if (environment.getActiveVmCount() != AdvsacConfig.INITIAL_VM_COUNT) {
             throw new IllegalStateException("Reset must start with exactly "
                     + AdvsacConfig.INITIAL_VM_COUNT + " VMs.");
