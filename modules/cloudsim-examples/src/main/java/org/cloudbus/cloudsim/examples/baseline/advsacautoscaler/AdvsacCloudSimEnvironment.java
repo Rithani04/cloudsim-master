@@ -212,6 +212,11 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         return activeVms == null ? 0 : activeVms.size();
     }
 
+    /** Number of VMs CloudSim has actually acknowledged as created. */
+    public int getCreatedVmCount() {
+        return broker == null ? 0 : broker.getGuestsCreatedList().size();
+    }
+
     public double getCurrentTime() {
         return currentTime;
     }
