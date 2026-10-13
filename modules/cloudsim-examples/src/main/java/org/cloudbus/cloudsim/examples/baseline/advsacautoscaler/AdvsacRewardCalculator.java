@@ -1,10 +1,12 @@
 package org.cloudbus.cloudsim.examples.baseline.advsacautoscaler;
 
 /**
- * Computes the initial ASTRA-style reward for the plain baseline.
+ * Computes a simple ASTRA-inspired reward for the plain baseline.
  *
- * Reward uses average CPU utilization and average response time.
- * No uncertainty, distribution-shift, adversarial or risk term is used.
+ * Reward encourages CPU utilization while applying a continuous, bounded
+ * penalty when average response time exceeds the SLO. This avoids a
+ * discontinuous reward drop immediately above the SLO. No uncertainty,
+ * distribution-shift, adversarial or risk term is used.
  */
 public final class AdvsacRewardCalculator {
 
@@ -14,7 +16,7 @@ public final class AdvsacRewardCalculator {
      * @param averageCpuUtilization average CPU utilization in [0, 1]
      * @param averageResponseTime average response time in seconds
      * @param activeVmCount number of active VMs after the action
-     * @return finite scalar reward
+     * @return scalar reward, finite for valid inputs
      */
     public double calculate(
             final double averageCpuUtilization,
@@ -34,13 +36,14 @@ public final class AdvsacRewardCalculator {
                     "Response time must be finite and non-negative.");
         }
 
-        double reward;
-        if (averageResponseTime <= AdvsacConfig.SLO_SECONDS) {
-            reward = averageCpuUtilization;
-        } else {
-            reward = averageCpuUtilization
-                    - (AdvsacConfig.SLO_SECONDS / averageResponseTime);
-        }
+        double normalizedSlaViolation = Math.max(
+                0.0,
+                (averageResponseTime - AdvsacConfig.SLO_SECONDS)
+                        / AdvsacConfig.SLO_SECONDS);
+        // Cap the SLA penalty at 1.0 to keep extreme latency from dominating
+        // the reward without bound. The penalty is continuous at the SLO.
+        normalizedSlaViolation = Math.min(1.0, normalizedSlaViolation);
+        double reward = averageCpuUtilization - normalizedSlaViolation;
 
         if (constraintViolation
                 || activeVmCount < AdvsacConfig.MIN_VM_COUNT
