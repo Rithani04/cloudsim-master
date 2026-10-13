@@ -773,15 +773,14 @@ public class CloudSim {
 				break;
 			}
 
-			if (pauseAt != -1
-					&& ((!future.isEmpty() && clock <= pauseAt && pauseAt <= future.peek()
-							.eventTime()) || future.isEmpty() && pauseAt <= clock)) {
-				/*
-				 * Publish the pause boundary and the completed event processing
-				 * together. The environment runs the controller on another thread
-				 * and observes isPaused() as the synchronization boundary.
-				 */
-				clock = pauseAt;
+			/*
+			 * Pause only after the event queue has advanced to the requested
+			 * simulation time. Pausing merely because the next queued event is
+			 * after pauseAt can skip processing events already delivered to
+			 * entities at the previous timestamp (for example, broker resource
+			 * characteristics and VM-creation acknowledgements).
+			 */
+			if (pauseAt != -1 && clock >= pauseAt) {
 				pauseSimulation();
 			}
 
