@@ -212,9 +212,26 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         return activeVms == null ? 0 : activeVms.size();
     }
 
-    /** Number of VMs CloudSim has actually acknowledged as created. */
-    public int getCreatedVmCount() {
-        return broker == null ? 0 : broker.getGuestsCreatedList().size();
+    /**
+     * Returns IDs of active VMs that are not fully provisioned in CloudSim.
+     *
+     * Checking the active list size against the broker's created-list size is
+     * not sufficient: those lists have different lifecycle semantics. Each
+     * active VM must instead have a host and appear in the broker's ACK list.
+     */
+    public List<Integer> getUnprovisionedActiveVmIds() {
+        List<Integer> unprovisionedIds = new ArrayList<>();
+        if (activeVms == null || broker == null) {
+            return unprovisionedIds;
+        }
+
+        List<Vm> acknowledgedVms = broker.getGuestsCreatedList();
+        for (Vm vm : activeVms) {
+            if (vm.getHost() == null || !acknowledgedVms.contains(vm)) {
+                unprovisionedIds.add(vm.getId());
+            }
+        }
+        return unprovisionedIds;
     }
 
     public double getCurrentTime() {
