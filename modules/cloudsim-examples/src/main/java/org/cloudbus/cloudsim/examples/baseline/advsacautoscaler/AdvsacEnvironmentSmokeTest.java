@@ -66,6 +66,15 @@ public final class AdvsacEnvironmentSmokeTest {
                         + steps + ": " + vmCount);
             }
 
+            int createdVmCount = environment.getCreatedVmCount();
+            if (createdVmCount != vmCount) {
+                throw new IllegalStateException(
+                        "VM lifecycle mismatch at step " + steps
+                                + ": environment tracks " + vmCount
+                                + " active VMs, but CloudSim acknowledges "
+                                + createdVmCount + " created VMs.");
+            }
+
             if (transition.isDone() != (steps == EXPECTED_STEPS)) {
                 throw new IllegalStateException(
                         "Episode termination flag is incorrect at step " + steps);
