@@ -34,7 +34,7 @@ public final class AdvsacStateBuilder {
         }
 
         lastAverageCpuUtilization = calculateAverageCpuUtilization(activeVms, currentTime);
-        lastAverageMemoryUtilization = calculateAverageMemoryUtilization(activeVms);
+        lastAverageMemoryUtilization = calculateAverageMemoryUtilization(activeVms, currentTime);
         double recentResponseTime = calculateRecentAverageResponseTime(cloudlets, currentTime);
         if (recentResponseTime >= 0.0) {
             lastAverageResponseTime = recentResponseTime;
@@ -132,8 +132,12 @@ public final class AdvsacStateBuilder {
         return total / activeVms.size();
     }
 
-    private double calculateAverageMemoryUtilization(final List<Vm> activeVms) {
-        if (activeVms.isEmpty()) {
+    private double calculateAverageMemoryUtilization(
+            final List<Vm> activeVms,
+            final double currentTime) {
+        // Before CloudSim starts, VMs have not been provisioned and no workload
+        // is executing. VM requested-RAM defaults can misleadingly look full.
+        if (currentTime <= 0.0 || activeVms.isEmpty()) {
             return 0.0;
         }
 
