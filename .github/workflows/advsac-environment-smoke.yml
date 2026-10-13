@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - phase2/advsac-baseline-organization
+      - phase2/plain-discrete-advsac
   pull_request:
     branches:
       - phase2/advsac-baseline-organization
