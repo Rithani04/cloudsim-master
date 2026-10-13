@@ -66,13 +66,14 @@ public final class AdvsacEnvironmentSmokeTest {
                         + steps + ": " + vmCount);
             }
 
-            int createdVmCount = environment.getCreatedVmCount();
-            if (createdVmCount != vmCount) {
+            var unprovisionedVmIds = environment.getUnprovisionedActiveVmIds();
+            if (!unprovisionedVmIds.isEmpty()) {
                 throw new IllegalStateException(
-                        "VM lifecycle mismatch at step " + steps
-                                + ": environment tracks " + vmCount
-                                + " active VMs, but CloudSim acknowledges "
-                                + createdVmCount + " created VMs.");
+                        "Active VMs are not fully provisioned at step " + steps
+                                + " (t=" + transition.getSimulationTime() + "): "
+                                + unprovisionedVmIds
+                                + ". Each active VM must have a host and a successful "
+                                + "CloudSim creation acknowledgement.");
             }
 
             if (transition.isDone() != (steps == EXPECTED_STEPS)) {
