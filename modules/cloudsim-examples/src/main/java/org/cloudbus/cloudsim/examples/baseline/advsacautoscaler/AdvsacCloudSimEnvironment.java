@@ -136,10 +136,6 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
             broker.submitGuestList(activeVms);
 
             nextTime = AdvsacConfig.RL_TIMESTEP;
-            if (!CloudSim.pauseSimulation((long) nextTime)) {
-                throw new IllegalStateException(
-                        "Could not schedule initial CloudSim pause at t=" + nextTime);
-            }
 
             simulationThread = new Thread(
                     () -> CloudSim.startSimulation(),
@@ -172,10 +168,6 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
                 currentTime = AdvsacConfig.EPISODE_DURATION;
                 episodeDone = true;
             } else {
-                if (!CloudSim.pauseSimulation((long) nextTime)) {
-                    throw new IllegalStateException(
-                            "Could not schedule CloudSim pause at t=" + nextTime);
-                }
                 CloudSim.resumeSimulation();
                 waitForPauseOrCompletion(nextTime);
                 currentTime = nextTime;
@@ -446,8 +438,20 @@ public final class AdvsacCloudSimEnvironment implements AdvsacEnvironment {
         @Override
         public void processEvent(final SimEvent event) {
             double nextTick = CloudSim.clock() + AdvsacConfig.RL_TIMESTEP;
-            if (nextTick <= AdvsacConfig.EPISODE_DURATION) {
+            if (nextTick < AdvsacConfig.EPISODE_DURATION
+                    || Math.abs(nextTick - AdvsacConfig.EPISODE_DURATION) < 1.0e-9) {
                 schedule(getId(), AdvsacConfig.RL_TIMESTEP, TickerTag.TICK);
+            }
+
+            /*
+             * Pause from the ticker's event handler instead of using
+             * pauseSimulation(time). CloudSim delivers events to entities in
+             * one tick and processes them in the following tick; a timed pause
+             * can stop between those phases, before the broker handles the
+             * resource-characteristics/VM-creation events already delivered.
+             */
+            if (CloudSim.clock() < AdvsacConfig.EPISODE_DURATION) {
+                CloudSim.pauseSimulation();
             }
         }
 
