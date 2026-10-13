@@ -22,7 +22,7 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Compile CloudSim modules
-        run: mvn -B -pl modules/cloudsim-examples -am -DskipTests compile
+        run: mvn -B -pl modules/cloudsim-examples -am -DskipTests install
       - name: Run 100-step environment smoke test
         run: >
           mvn -B -pl modules/cloudsim-examples
