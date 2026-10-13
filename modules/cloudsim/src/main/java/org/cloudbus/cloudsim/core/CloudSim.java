@@ -776,8 +776,13 @@ public class CloudSim {
 			if (pauseAt != -1
 					&& ((!future.isEmpty() && clock <= pauseAt && pauseAt <= future.peek()
 							.eventTime()) || future.isEmpty() && pauseAt <= clock)) {
-				pauseSimulation();
+				/*
+				 * Publish the pause boundary and the completed event processing
+				 * together. The environment runs the controller on another thread
+				 * and observes isPaused() as the synchronization boundary.
+				 */
 				clock = pauseAt;
+				pauseSimulation();
 			}
 
 			// Outside the synchronized block to avoid slowing down the main loop.
@@ -855,7 +860,9 @@ public class CloudSim {
 	 * @return true, if is paused
 	 */
 	public static boolean isPaused() {
-		return paused;
+		synchronized (pauseObj) {
+			return paused;
+		}
 	}
 
 }
