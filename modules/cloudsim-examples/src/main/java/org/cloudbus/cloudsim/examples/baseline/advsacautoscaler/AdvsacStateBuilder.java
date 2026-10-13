@@ -178,7 +178,13 @@ public final class AdvsacStateBuilder {
             if (cloudlet.getStatus() == Cloudlet.CloudletStatus.SUCCESS) {
                 double finishTime = cloudlet.getExecFinishTime();
                 if (finishTime > windowStart && finishTime <= currentTime) {
-                    double responseTime = finishTime - cloudlet.getSubmissionTime();
+                    int cloudletId = cloudlet.getCloudletId();
+                    if (cloudletId < 0 || cloudletId >= arrivalTimes.size()) {
+                        continue;
+                    }
+                    // Measure end-to-end response time from the scheduled request
+                    // arrival, not from when the broker submits it to a VM.
+                    double responseTime = finishTime - arrivalTimes.get(cloudletId);
                     if (responseTime >= 0.0 && !Double.isNaN(responseTime)
                             && !Double.isInfinite(responseTime)) {
                         total += responseTime;
