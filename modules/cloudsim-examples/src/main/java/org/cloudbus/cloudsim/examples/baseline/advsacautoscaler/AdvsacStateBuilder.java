@@ -24,7 +24,8 @@ public final class AdvsacStateBuilder {
             final double currentTime,
             final List<Vm> activeVms,
             final List<Cloudlet> cloudlets,
-            final List<Double> arrivalTimes) {
+            final List<Double> arrivalTimes,
+            final int waitingQueueLength) {
 
         if (activeVms == null || cloudlets == null || arrivalTimes == null
                 || cloudlets.size() != arrivalTimes.size()) {
@@ -38,7 +39,7 @@ public final class AdvsacStateBuilder {
         if (recentResponseTime >= 0.0) {
             lastAverageResponseTime = recentResponseTime;
         }
-        lastQueueLength = calculateQueueLength(currentTime, cloudlets, arrivalTimes);
+        lastQueueLength = Math.max(0, waitingQueueLength);
 
         int recentArrivals = countArrivals(
                 currentTime - AdvsacConfig.RL_TIMESTEP,
@@ -182,20 +183,6 @@ public final class AdvsacStateBuilder {
         lastAverageResponseTime = 0.0;
         lastQueueLength = 0;
         lastWorkloadRate = 0.0;
-    }
-
-    private int calculateQueueLength(
-            final double currentTime,
-            final List<Cloudlet> cloudlets,
-            final List<Double> arrivalTimes) {
-        int queue = 0;
-        for (int i = 0; i < cloudlets.size(); i++) {
-            if (arrivalTimes.get(i) <= currentTime
-                    && cloudlets.get(i).getStatus() != Cloudlet.CloudletStatus.SUCCESS) {
-                queue++;
-            }
-        }
-        return queue;
     }
 
     private int countArrivals(
