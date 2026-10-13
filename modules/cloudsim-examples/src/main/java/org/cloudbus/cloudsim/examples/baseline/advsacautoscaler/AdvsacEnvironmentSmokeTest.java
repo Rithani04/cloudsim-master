@@ -19,6 +19,7 @@ public final class AdvsacEnvironmentSmokeTest {
 
     public static void main(final String[] args) {
         validateResponseTimeAndRewardCalculations();
+        validateAgentTrainingStep();
 
         AdvsacCloudSimEnvironment environment = new AdvsacCloudSimEnvironment();
         var initialState = environment.reset();
@@ -132,6 +133,27 @@ public final class AdvsacEnvironmentSmokeTest {
         System.out.println("Scale-down operations: "
                 + environment.getTotalScaleDownOperations());
         System.out.println("SMOKE TEST PASSED.");
+    }
+
+    private static void validateAgentTrainingStep() {
+        AdvsacAgent agent = new AdvsacAgent();
+        AdvsacState state = new AdvsacState(
+                new double[] {0.5, 0.4, 0.3, 0.5, 0.0, 0.4, 0.2, 1.0});
+        AdvsacState nextState = new AdvsacState(
+                new double[] {0.6, 0.4, 0.4, 0.6, 0.1, 0.5, 0.3, 1.0});
+
+        for (int i = 0; i < AdvsacConfig.BATCH_SIZE; i++) {
+            agent.remember(state, i % AdvsacConfig.ACTION_DIMENSION,
+                    0.25, nextState, false);
+        }
+        if (!agent.trainStep()) {
+            throw new IllegalStateException("Agent must train when a full minibatch is available.");
+        }
+        int action = agent.selectAction(nextState, false);
+        if (action < 0 || action >= AdvsacConfig.ACTION_DIMENSION) {
+            throw new IllegalStateException("Agent returned an invalid action index: " + action);
+        }
+        System.out.println("Plain discrete SAC update check passed.");
     }
 
     private static void validateResponseTimeAndRewardCalculations() {
