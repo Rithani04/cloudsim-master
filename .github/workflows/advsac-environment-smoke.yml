@@ -5,6 +5,7 @@ on:
     branches:
       - phase2/advsac-baseline-organization
       - phase2/plain-discrete-advsac
+      - phase2/advsac-gradient-regularization
   pull_request:
     branches:
       - phase2/advsac-baseline-organization
