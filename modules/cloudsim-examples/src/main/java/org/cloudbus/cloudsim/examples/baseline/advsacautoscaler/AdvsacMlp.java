@@ -56,6 +56,30 @@ final class AdvsacMlp {
         return forward(input).activations[weights.length].clone();
     }
 
+    /** Computes the gradient of one output with respect to each input feature. */
+    double[] inputGradient(final double[] input, final int outputIndex) {
+        if (outputIndex < 0 || outputIndex >= sizes[sizes.length - 1]) {
+            throw new IllegalArgumentException("Output index is out of range.");
+        }
+        ForwardPass pass = forward(input);
+        double[] delta = new double[sizes[sizes.length - 1]];
+        delta[outputIndex] = 1.0;
+        for (int layer = weights.length - 1; layer >= 0; layer--) {
+            double[] previousDelta = new double[sizes[layer]];
+            for (int out = 0; out < sizes[layer + 1]; out++) {
+                double gradient = delta[out];
+                if (layer < weights.length - 1 && pass.preactivations[layer][out] <= 0.0) {
+                    gradient = 0.0;
+                }
+                for (int in = 0; in < sizes[layer]; in++) {
+                    previousDelta[in] += weights[layer][out][in] * gradient;
+                }
+            }
+            delta = previousDelta;
+        }
+        return delta;
+    }
+
     /**
      * Applies one online SGD update for a gradient dLoss/dOutput.
      * The supplied gradient is not modified.
@@ -75,8 +99,11 @@ final class AdvsacMlp {
                         && pass.preactivations[layer][out] <= 0.0) {
                     gradient = 0.0;
                 }
+                // Propagate through the unchanged weights, then update parameters.
                 for (int in = 0; in < sizes[layer]; in++) {
                     nextDelta[in] += weights[layer][out][in] * gradient;
+                }
+                for (int in = 0; in < sizes[layer]; in++) {
                     weights[layer][out][in] -= learningRate * gradient * previous[in];
                 }
                 biases[layer][out] -= learningRate * gradient;
