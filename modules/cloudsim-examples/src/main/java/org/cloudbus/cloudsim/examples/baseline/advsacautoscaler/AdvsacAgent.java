@@ -7,10 +7,9 @@ import java.util.Random;
  * Plain discrete Soft Actor-Critic baseline.
  *
  * The policy emits a categorical distribution over five scaling actions.
- * Twin critics estimate Q(s,a) for all discrete actions; target critics,
- * entropy-regularized Bellman targets and Polyak target updates are used.
- * No adversarial state perturbation, uncertainty estimation, distribution
- * shift detection or risk regularization is included in this baseline.
+ * ASTRA-inspired discrete AdvSAC: twin critics, entropy-regularized targets,
+ * bounded worst-case state perturbations and critic input-gradient regularization.
+ * This is a project adaptation, not a claim of exact ASTRA reproduction.
  */
 public final class AdvsacAgent {
     private static final double ENTROPY_TEMPERATURE = 0.2;
@@ -83,16 +82,20 @@ public final class AdvsacAgent {
             double[] state = sample.getState();
             double[] nextState = sample.getNextState();
             double[] nextProbabilities = policyProbabilities(nextState);
-            double[] targetQ1 = targetCriticOne.predict(nextState);
-            double[] targetQ2 = targetCriticTwo.predict(nextState);
             double softValue = 0.0;
 
             for (int action = 0; action < AdvsacConfig.ACTION_DIMENSION; action++) {
-                double minQ = Math.min(targetQ1[action], targetQ2[action]);
+                double[] gradient = minCriticInputGradient(nextState, action, true);
+                double gradientL1 = l1Norm(gradient);
+                double[] adversarialNextState = perturbState(nextState, gradient);
+                double q1 = targetCriticOne.predict(adversarialNextState)[action];
+                double q2 = targetCriticTwo.predict(adversarialNextState)[action];
+                double robustQ = Math.min(q1, q2)
+                        - AdvsacConfig.ADVERSARIAL_EPSILON * gradientL1;
                 double logProbability = Math.log(Math.max(
                         PROBABILITY_FLOOR, nextProbabilities[action]));
                 softValue += nextProbabilities[action]
-                        * (minQ - ENTROPY_TEMPERATURE * logProbability);
+                        * (robustQ - ENTROPY_TEMPERATURE * logProbability);
             }
 
             double target = sample.getReward();
@@ -134,8 +137,10 @@ public final class AdvsacAgent {
 
         for (int action = 0; action < perActionObjective.length; action++) {
             double probability = Math.max(PROBABILITY_FLOOR, probabilities[action]);
+            double gradientPenalty = AdvsacConfig.ADVERSARIAL_EPSILON
+                    * l1Norm(minCriticInputGradient(state, action, false));
             perActionObjective[action] = ENTROPY_TEMPERATURE * Math.log(probability)
-                    - Math.min(qOne[action], qTwo[action]);
+                    - Math.min(qOne[action], qTwo[action]) + gradientPenalty;
             expectedObjective += probabilities[action] * perActionObjective[action];
         }
 
@@ -145,6 +150,36 @@ public final class AdvsacAgent {
                     * (perActionObjective[action] - expectedObjective);
         }
         actor.train(state, logitsGradient, AdvsacConfig.ACTOR_LEARNING_RATE);
+    }
+
+    /** Gradient of min(Q1,Q2) for an action, using the critic that defines the minimum. */
+    private double[] minCriticInputGradient(
+            final double[] state, final int action, final boolean target) {
+        AdvsacMlp first = target ? targetCriticOne : criticOne;
+        AdvsacMlp second = target ? targetCriticTwo : criticTwo;
+        double q1 = first.predict(state)[action];
+        double q2 = second.predict(state)[action];
+        return (q1 <= q2 ? first : second).inputGradient(state, action);
+    }
+
+    /** Worst-case first-order perturbation: -epsilon * sign(gradient), clipped to [0,1]. */
+    private double[] perturbState(final double[] state, final double[] gradient) {
+        double[] perturbed = state.clone();
+        for (int i = 0; i < perturbed.length; i++) {
+            double sign = gradient[i] > 0.0 ? 1.0 : gradient[i] < 0.0 ? -1.0 : 0.0;
+            perturbed[i] = Math.max(AdvsacConfig.NORMALIZATION_MIN,
+                    Math.min(AdvsacConfig.NORMALIZATION_MAX,
+                            perturbed[i] - AdvsacConfig.ADVERSARIAL_EPSILON * sign));
+        }
+        return perturbed;
+    }
+
+    private double l1Norm(final double[] values) {
+        double sum = 0.0;
+        for (double value : values) {
+            sum += Math.abs(value);
+        }
+        return sum;
     }
 
     private double[] policyProbabilities(final double[] state) {
