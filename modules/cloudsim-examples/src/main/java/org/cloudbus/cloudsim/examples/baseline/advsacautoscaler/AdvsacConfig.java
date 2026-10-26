@@ -41,6 +41,8 @@ public final class AdvsacConfig {
     public static final double CRITIC_LEARNING_RATE = 1.0e-4;
     public static final double DISCOUNT_FACTOR = 0.99;
     public static final double TARGET_UPDATE_TAU = 0.01;
+    /** L-infinity bound for normalized-state adversarial perturbations. */
+    public static final double ADVERSARIAL_EPSILON = 0.01;
     public static final int REPLAY_BUFFER_CAPACITY = 100_000;
     public static final int BATCH_SIZE = 128;
     public static final int TRAINING_EPISODES = 200;
