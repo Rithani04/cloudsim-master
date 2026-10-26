@@ -4,13 +4,9 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Plain discrete Soft Actor-Critic baseline.
- *
- * The policy emits a categorical distribution over five scaling actions.
- * Twin critics estimate Q(s,a) for all discrete actions; target critics,
- * entropy-regularized Bellman targets and Polyak target updates are used.
- * No adversarial state perturbation, uncertainty estimation, distribution
- * shift detection or risk regularization is included in this baseline.
+ * Discrete SAC with ASTRA-inspired adversarial state-gradient regularization.
+ * Perturbations are bounded and used in learning targets; the CloudSim
+ * environment and its recorded observations remain unchanged.
  */
 public final class AdvsacAgent {
     private static final double ENTROPY_TEMPERATURE = 0.2;
@@ -62,16 +58,12 @@ public final class AdvsacAgent {
         return probabilities.length - 1;
     }
 
-    public void remember(
-            final AdvsacState state,
-            final int actionIndex,
-            final double reward,
-            final AdvsacState nextState,
-            final boolean done) {
+    public void remember(final AdvsacState state, final int actionIndex,
+            final double reward, final AdvsacState nextState, final boolean done) {
         replayBuffer.add(state, actionIndex, reward, nextState, done);
     }
 
-    /** Performs one minibatch update once the replay buffer has enough samples. */
+    /** Performs one replay minibatch update once enough transitions are available. */
     public boolean trainStep() {
         if (!replayBuffer.canSample(AdvsacConfig.BATCH_SIZE)) {
             return false;
@@ -82,17 +74,28 @@ public final class AdvsacAgent {
         for (AdvsacReplayBuffer.AdvsacTransitionSample sample : batch) {
             double[] state = sample.getState();
             double[] nextState = sample.getNextState();
-            double[] nextProbabilities = policyProbabilities(nextState);
-            double[] targetQ1 = targetCriticOne.predict(nextState);
-            double[] targetQ2 = targetCriticTwo.predict(nextState);
-            double softValue = 0.0;
 
+            // First-order worst-case perturbation: delta = -epsilon * sign(grad Q).
+            double[] originalQ1 = targetCriticOne.predict(nextState);
+            double[] originalQ2 = targetCriticTwo.predict(nextState);
+            int referenceAction = argMinCriticAction(originalQ1, originalQ2);
+            double[] gradient1 = targetCriticOne.inputGradient(nextState, referenceAction);
+            double[] gradient2 = targetCriticTwo.inputGradient(nextState, referenceAction);
+            double[] adversarialNextState = boundedAdversarialState(nextState, gradient1, gradient2);
+
+            double[] nextProbabilities = policyProbabilities(adversarialNextState);
+            double[] targetQ1 = targetCriticOne.predict(adversarialNextState);
+            double[] targetQ2 = targetCriticTwo.predict(adversarialNextState);
+            double softValue = 0.0;
             for (int action = 0; action < AdvsacConfig.ACTION_DIMENSION; action++) {
                 double minQ = Math.min(targetQ1[action], targetQ2[action]);
                 double logProbability = Math.log(Math.max(
                         PROBABILITY_FLOOR, nextProbabilities[action]));
+                double gradientPenalty = stateGradientL1(
+                        adversarialNextState, action);
                 softValue += nextProbabilities[action]
-                        * (minQ - ENTROPY_TEMPERATURE * logProbability);
+                        * (minQ - ENTROPY_TEMPERATURE * logProbability
+                        - AdvsacConfig.ADVERSARIAL_EPSILON * gradientPenalty);
             }
 
             double target = sample.getReward();
@@ -114,11 +117,8 @@ public final class AdvsacAgent {
         return replayBuffer.size();
     }
 
-    private void updateCritic(
-            final AdvsacMlp critic,
-            final double[] state,
-            final int selectedAction,
-            final double target) {
+    private void updateCritic(final AdvsacMlp critic, final double[] state,
+            final int selectedAction, final double target) {
         double[] prediction = critic.predict(state);
         double[] gradient = new double[AdvsacConfig.ACTION_DIMENSION];
         gradient[selectedAction] = 2.0 * (prediction[selectedAction] - target);
@@ -134,8 +134,10 @@ public final class AdvsacAgent {
 
         for (int action = 0; action < perActionObjective.length; action++) {
             double probability = Math.max(PROBABILITY_FLOOR, probabilities[action]);
+            double gradientPenalty = stateGradientL1(state, action);
             perActionObjective[action] = ENTROPY_TEMPERATURE * Math.log(probability)
-                    - Math.min(qOne[action], qTwo[action]);
+                    - Math.min(qOne[action], qTwo[action])
+                    + AdvsacConfig.ADVERSARIAL_EPSILON * gradientPenalty;
             expectedObjective += probabilities[action] * perActionObjective[action];
         }
 
@@ -145,6 +147,41 @@ public final class AdvsacAgent {
                     * (perActionObjective[action] - expectedObjective);
         }
         actor.train(state, logitsGradient, AdvsacConfig.ACTOR_LEARNING_RATE);
+    }
+
+    private double stateGradientL1(final double[] state, final int action) {
+        double[] g1 = criticOne.inputGradient(state, action);
+        double[] g2 = criticTwo.inputGradient(state, action);
+        double norm = 0.0;
+        for (int i = 0; i < g1.length; i++) {
+            norm += 0.5 * (Math.abs(g1[i]) + Math.abs(g2[i]));
+        }
+        return norm;
+    }
+
+    private static int argMinCriticAction(final double[] q1, final double[] q2) {
+        int best = 0;
+        double bestValue = Math.min(q1[0], q2[0]);
+        for (int action = 1; action < q1.length; action++) {
+            double value = Math.min(q1[action], q2[action]);
+            if (value < bestValue) {
+                best = action;
+                bestValue = value;
+            }
+        }
+        return best;
+    }
+
+    private static double[] boundedAdversarialState(
+            final double[] state, final double[] gradient1, final double[] gradient2) {
+        double[] perturbed = state.clone();
+        for (int i = 0; i < perturbed.length; i++) {
+            double gradient = 0.5 * (gradient1[i] + gradient2[i]);
+            double delta = -AdvsacConfig.ADVERSARIAL_EPSILON * Math.signum(gradient);
+            perturbed[i] = Math.max(AdvsacConfig.NORMALIZATION_MIN,
+                    Math.min(AdvsacConfig.NORMALIZATION_MAX, state[i] + delta));
+        }
+        return perturbed;
     }
 
     private double[] policyProbabilities(final double[] state) {
