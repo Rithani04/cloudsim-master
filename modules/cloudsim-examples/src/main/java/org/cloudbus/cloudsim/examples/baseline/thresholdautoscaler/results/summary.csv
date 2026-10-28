@@ -1,0 +1,2 @@
+"controller","workload","submitted","completed_success","completion_rate_percent","latency_sample_count","missing_arrival_count","avg_response_time","p95_response_time","sla_limit","sla_violation_rate_completed_percent","sla_miss_or_unfinished_percent","avg_cpu_percent","avg_memory_percent","avg_active_vms","vm_time","estimated_cost","scaling_events","scaling_oscillations"
+"threshold","NORMAL","100","65","65.000000","65","0","11.458262","17.719783","10.000000","21.538462","49.000000","NA","NA","NA","0.000000","0.000000","11","7"
