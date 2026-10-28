@@ -16,6 +16,7 @@ import org.cloudbus.cloudsim.examples.baseline.common.state.CloudStateCollector;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.cloudbus.cloudsim.examples.baseline.common.metrics.SimulationMetrics;
 
 /**
  * Runtime autoscaling manager.
@@ -78,6 +79,13 @@ public class AutoscalingManager extends SimEntity {
      */
     private int nextVmId;
 
+    private SimulationMetrics metrics;
+    private int lastObservedActiveVms = -1;
+
+    public void setMetrics(SimulationMetrics metrics) {
+        this.metrics = metrics;
+    }
+
     /**
      * Number of scaling actions.
      */
@@ -135,6 +143,11 @@ public class AutoscalingManager extends SimEntity {
          * t = 30
          * ...
          */
+        if (metrics != null) {
+            lastObservedActiveVms = countProvisionedVms();
+            metrics.recordSample(0.0, calculateAverageCpuUtilization(0.0), Double.NaN, lastObservedActiveVms);
+        }
+
         schedule(
                 getId(),
                 AutoscalingConfig.DECISION_INTERVAL,
@@ -217,6 +230,15 @@ public class AutoscalingManager extends SimEntity {
 
                         cloudletList
                 );
+
+        if (metrics != null) {
+            int provisioned = countProvisionedVms();
+            if (lastObservedActiveVms >= 0 && provisioned != lastObservedActiveVms) {
+                metrics.recordScaling(currentTime, lastObservedActiveVms, provisioned);
+            }
+            lastObservedActiveVms = provisioned;
+            metrics.recordSample(currentTime, cpuUtilization, Double.NaN, provisioned);
+        }
 
         /*
          * Ask the controller what to do.
@@ -479,6 +501,15 @@ public class AutoscalingManager extends SimEntity {
                 totalUtilization
                         / vmList.size()
         ) * 100.0;
+    }
+
+    /** Number of VMs actually placed on a host, not merely requested. */
+    private int countProvisionedVms() {
+        int count = 0;
+        for (Vm vm : vmList) {
+            if (vm != null && vm.getHost() != null) count++;
+        }
+        return count;
     }
 
     /**

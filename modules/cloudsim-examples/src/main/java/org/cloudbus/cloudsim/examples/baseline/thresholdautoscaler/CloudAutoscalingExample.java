@@ -30,10 +30,12 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import org.cloudbus.cloudsim.examples.baseline.common.metrics.SimulationMetrics;
 
 import org.cloudbus.cloudsim.examples.baseline.common.state.CloudState;
 import org.cloudbus.cloudsim.examples.baseline.common.state.CloudStateCollector;
-import org.cloudbus.cloudsim.examples.baseline.thresholdautoscaler.ThresholdAutoscaler;
 
 /**
  * Stage 1 CloudSim environment for the
@@ -58,6 +60,7 @@ import org.cloudbus.cloudsim.examples.baseline.thresholdautoscaler.ThresholdAuto
 public class CloudAutoscalingExample {
 
     private static List<Vm> vmList;
+    private static SimulationMetrics metrics;
 
     /*
      * Person 1:
@@ -95,6 +98,7 @@ public class CloudAutoscalingExample {
              */
             stateCollector =
                     new CloudStateCollector();
+            metrics = new SimulationMetrics();
             allCloudlets =
                     new ArrayList<>();
 
@@ -157,6 +161,8 @@ public class CloudAutoscalingExample {
                             datacenterId
                     );
 
+
+            autoscalingManager.setMetrics(metrics);
 
             Log.println();
 
@@ -221,7 +227,9 @@ public class CloudAutoscalingExample {
             List<Cloudlet> completedCloudlets =
                     broker.getCloudletReceivedList();
 
-
+            System.out.println(
+                    "DEBUG: Reached metrics export section!"
+            );
             /* =====================================================
                9. COLLECT FINAL CLOUD STATE
                ===================================================== */
@@ -273,6 +281,37 @@ public class CloudAutoscalingExample {
                     completedCloudlets
             );
 
+            // =====================================================
+// FINAL METRICS EVALUATION
+// =====================================================
+
+            Path resultsDirectory = Paths.get(
+                    "modules", "cloudsim-examples",
+                    "src", "main", "java",
+                    "org", "cloudbus", "cloudsim", "examples",
+                    "baseline", "thresholdautoscaler",
+                    "results"
+            ).toAbsolutePath();
+
+// STEP 1: Export simulation metrics to CSV
+            metrics.export(
+                    resultsDirectory,
+                    "threshold",
+                    AutoscalingConfig.WORKLOAD_REGIME.name(),
+                    completedCloudlets,
+                    allCloudlets.size(),
+                    10.0,
+                    0.01,
+                    AutoscalingConfig.SIMULATION_TIME
+            );
+
+// STEP 2: Print complete evaluation and generate graphs
+            CloudSimEvaluation.generate(resultsDirectory);
+
+            System.out.println(
+                    "\nEvaluation completed! Results saved to: "
+                            + resultsDirectory
+            );
 
             /* =====================================================
                11. PRINT CLOUDLET RESULTS
@@ -656,6 +695,7 @@ public class CloudAutoscalingExample {
                     arrivalTime
             );
             broker.registerScheduledCloudlets(1);
+            metrics.recordArrival(cloudlet.getCloudletId(), arrivalTime);
         }
     }
 
