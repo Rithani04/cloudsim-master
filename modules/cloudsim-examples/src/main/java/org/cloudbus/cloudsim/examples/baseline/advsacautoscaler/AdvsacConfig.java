@@ -1,7 +1,7 @@
 package org.cloudbus.cloudsim.examples.baseline.advsacautoscaler;
 
 /**
- * Configuration for the first Plain Discrete AdvSAC experiment.
+ * Configuration for the ASTRA-inspired discrete AdvSAC experiment.
  *
  * These are project experiment settings, not values copied wholesale
  * from the ASTRA paper. Uncertainty, distribution-shift detection,
@@ -33,7 +33,7 @@ public final class AdvsacConfig {
     public static final double INSTANCE_CONSTRAINT_PENALTY = -1.0;
     public static final long RANDOM_SEED = 42L;
 
-    /* Paper-informed initial training hyperparameters. */
+    /* Initial training hyperparameters; validate through controlled experiments. */
     public static final int ACTOR_HIDDEN_SIZE = 256;
     public static final int CRITIC_HIDDEN_SIZE = 256;
     public static final int NETWORK_DEPTH = 3;
@@ -41,6 +41,9 @@ public final class AdvsacConfig {
     public static final double CRITIC_LEARNING_RATE = 1.0e-4;
     public static final double DISCOUNT_FACTOR = 0.99;
     public static final double TARGET_UPDATE_TAU = 0.01;
+
+    /** Bounded L-infinity state perturbation strength for ASTRA-inspired AdvSAC. */
+    public static final double ADVERSARIAL_EPSILON = 0.02;
     public static final int REPLAY_BUFFER_CAPACITY = 100_000;
     public static final int BATCH_SIZE = 128;
     public static final int TRAINING_EPISODES = 200;

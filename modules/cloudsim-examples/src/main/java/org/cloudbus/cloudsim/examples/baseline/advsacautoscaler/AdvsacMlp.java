@@ -3,9 +3,8 @@ package org.cloudbus.cloudsim.examples.baseline.advsacautoscaler;
 import java.util.Random;
 
 /**
- * Small dependency-free multilayer perceptron for the experiment's actor and
- * critics. It uses three 256-unit ReLU hidden layers and a linear output layer.
- * Gradients are supplied by the SAC objective and propagated by backpropagation.
+ * Dependency-free MLP for discrete SAC. Supports input gradients so the
+ * ASTRA-inspired adversarial regularizer can penalize state-sensitive Q values.
  */
 final class AdvsacMlp {
     private final int[] sizes;
@@ -56,32 +55,61 @@ final class AdvsacMlp {
         return forward(input).activations[weights.length].clone();
     }
 
-    /**
-     * Applies one online SGD update for a gradient dLoss/dOutput.
-     * The supplied gradient is not modified.
-     */
-    void train(final double[] input, final double[] outputGradient, final double learningRate) {
-        if (outputGradient.length != sizes[sizes.length - 1]) {
-            throw new IllegalArgumentException("Output gradient dimension mismatch.");
+    /** Returns d(output[actionIndex])/d(input), without changing network weights. */
+    double[] inputGradient(final double[] input, final int actionIndex) {
+        if (actionIndex < 0 || actionIndex >= sizes[sizes.length - 1]) {
+            throw new IllegalArgumentException("Invalid output index: " + actionIndex);
         }
         ForwardPass pass = forward(input);
-        double[] delta = outputGradient.clone();
+        double[] delta = new double[sizes[sizes.length - 1]];
+        delta[actionIndex] = 1.0;
         for (int layer = weights.length - 1; layer >= 0; layer--) {
-            double[] previous = pass.activations[layer];
-            double[] nextDelta = new double[sizes[layer]];
+            double[] previousDelta = new double[sizes[layer]];
             for (int out = 0; out < sizes[layer + 1]; out++) {
                 double gradient = delta[out];
-                if (layer < weights.length - 1
-                        && pass.preactivations[layer][out] <= 0.0) {
+                if (layer < weights.length - 1 && pass.preactivations[layer][out] <= 0.0) {
                     gradient = 0.0;
                 }
                 for (int in = 0; in < sizes[layer]; in++) {
-                    nextDelta[in] += weights[layer][out][in] * gradient;
+                    previousDelta[in] += weights[layer][out][in] * gradient;
+                }
+            }
+            delta = previousDelta;
+        }
+        return delta;
+    }
+
+    /** Applies one SGD update for a supplied dLoss/dOutput vector. */
+    void train(final double[] input, final double[] outputGradient, final double learningRate) {
+        if (outputGradient == null || outputGradient.length != sizes[sizes.length - 1]) {
+            throw new IllegalArgumentException("Output gradient dimension mismatch.");
+        }
+        ForwardPass pass = forward(input);
+        double[][] deltas = new double[weights.length][];
+        deltas[weights.length - 1] = outputGradient.clone();
+
+        // Calculate every layer's delta using the same pre-update weights.
+        for (int layer = weights.length - 2; layer >= 0; layer--) {
+            double[] delta = new double[sizes[layer + 1]];
+            for (int out = 0; out < sizes[layer + 1]; out++) {
+                double downstream = 0.0;
+                for (int next = 0; next < sizes[layer + 2]; next++) {
+                    downstream += weights[layer + 1][next][out] * deltas[layer + 1][next];
+                }
+                delta[out] = pass.preactivations[layer][out] > 0.0 ? downstream : 0.0;
+            }
+            deltas[layer] = delta;
+        }
+
+        for (int layer = 0; layer < weights.length; layer++) {
+            double[] previous = pass.activations[layer];
+            for (int out = 0; out < sizes[layer + 1]; out++) {
+                double gradient = deltas[layer][out];
+                for (int in = 0; in < sizes[layer]; in++) {
                     weights[layer][out][in] -= learningRate * gradient * previous[in];
                 }
                 biases[layer][out] -= learningRate * gradient;
             }
-            delta = nextDelta;
         }
     }
 
